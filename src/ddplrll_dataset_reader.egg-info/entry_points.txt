@@ -1,0 +1,2 @@
+[console_scripts]
+ddplrll-reader = ddplrll_reader.cli:app

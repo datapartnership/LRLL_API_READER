@@ -1,0 +1,1311 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "Low Resource Language Library API",
+    "description": "Query the Low Resource Language Library catalogue and receive\n**Croissant 1.0 JSON-LD** responses ready for ML dataset tooling.\n\nAll endpoints (except `/health`) require authentication via Azure AD.\nClick **Authorize** to sign in — a browser pop-up will guide you through\nthe OAuth 2.0 Authorization Code flow and return a token automatically.",
+    "contact": {
+      "name": "DDP Data Access",
+      "url": "https://datapartnership.org/contact",
+      "email": "data@datapartnership.org"
+    },
+    "version": "v1"
+  },
+  "paths": {
+    "/api/Datasets/query": {
+      "get": {
+        "tags": [
+          "Datasets"
+        ],
+        "summary": "Query files and receive a Croissant JSON-LD response.",
+        "description": "All filter parameters are optional and combinable.\r\nWhen the number of matching files exceeds **limit**, the API randomly\r\nsamples **limit** files from the full result set.\r\n            \r\n**Authentication**: supply your API key in the `X-Api-Key` header\r\n(or use the Authorize button in Swagger UI).\r\n            \r\n### Example\r\n    GET /api/datasets/query?keyword=malaria&year=2024&limit=10",
+        "parameters": [
+          {
+            "name": "Keyword",
+            "in": "query",
+            "description": "Filter by keyword (partial, case-insensitive)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Theme",
+            "in": "query",
+            "description": "Filter by theme (partial, case-insensitive)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Author",
+            "in": "query",
+            "description": "Filter by author name (partial, case-insensitive)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Year",
+            "in": "query",
+            "description": "Filter by publication year, e.g. 2024",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Limit",
+            "in": "query",
+            "description": "Maximum number of file entries returned in the JSON-LD output.\r\nWhen more files match than the limit, a random sample is taken.\r\nDefault: 30. Max: 100.",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Croissant JSON-LD document (or a no-match message)",
+            "content": {
+              "application/ld+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CroissantResponse"
+                },
+                "example": {
+                  "@context": [
+                    "https://mlcommons.org/working-groups/data/croissant/",
+                    {
+                      "sc": "https://schema.org/",
+                      "dct": "http://purl.org/dc/terms/",
+                      "dqv": "http://www.w3.org/ns/dqv#",
+                      "cr": "http://mlcommons.org/croissant/",
+                      "ddpv": "https://datapartnership.org/ddpv-metadata-terms",
+                      "olac": "http://www.language-archives.org/OLAC/1.1/",
+                      "dcat": "http://www.w3.org/ns/dcat#",
+                      "prov": "http://www.w3.org/ns/prov#",
+                      "rai": "http://mlcommons.org/croissant/RAI/",
+                      "rdfs": "http://www.w3.org/2000/01/rdf-schema#"
+                    }
+                  ],
+                  "generatedAt": "2026-03-02T12:00:00.0000000Z",
+                  "samplingInfo": {
+                    "totalMatched": 142,
+                    "limit": 30,
+                    "returned": 30,
+                    "randomSample": true
+                  },
+                  "@graph": [
+                    {
+                      "@type": "sc:Dataset",
+                      "@id": "nation-2024",
+                      "sc:name": "Nation Newspaper 2024",
+                      "sc:temporalCoverage": "2024",
+                      "sc:spatialCoverage": "Malawi",
+                      "sc:inLanguage": "ny",
+                      "sc:creator": {
+                        "@type": "sc:Organization",
+                        "sc:name": "Nation Publications Limited"
+                      },
+                      "sc:publisher": {
+                        "@type": "sc:Organization",
+                        "sc:name": "Nation Publications Limited"
+                      },
+                      "sc:license": "LicenseRef-InternalDemoOnly",
+                      "sc:version": "v1.0.0",
+                      "cr:isLiveDataset": false,
+                      "distribution": [
+                        {
+                          "@type": "cr:FileObject",
+                          "@id": "nation-2024/nation-2024-01-15.pdf",
+                          "sc:name": "nation-2024-01-15.pdf",
+                          "sc:contentUrl": "https://localhost:5001/api/files/file-2024-001005c4",
+                          "sc:encodingFormat": "application/pdf",
+                          "sc:contentSize": 204800,
+                          "cr:sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                          "sc:author": "John Banda",
+                          "sc:datePublished": "2024-01-15",
+                          "sc:dateModified": "2024-01-16",
+                          "sc:inLanguage": "ny",
+                          "sc:numberOfPages": 4,
+                          "sc:wordCount": 1500,
+                          "ddpv:tokenCount": 120,
+                          "ddpv:charCount": 8500,
+                          "dct:subject": "news",
+                          "olac:discourseType": "news article",
+                          "sc:keywords": [
+                            "malaria",
+                            "health"
+                          ],
+                          "dcat:theme": [
+                            "HEALTH",
+                            "DISEASE CONTROL"
+                          ],
+                          "dcat:themeTaxonomy": "https://vocabularyserver.com/unbis/en/index.php"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CroissantResponse"
+                },
+                "example": {
+                  "@context": [
+                    "https://mlcommons.org/working-groups/data/croissant/",
+                    {
+                      "sc": "https://schema.org/",
+                      "dct": "http://purl.org/dc/terms/",
+                      "dqv": "http://www.w3.org/ns/dqv#",
+                      "cr": "http://mlcommons.org/croissant/",
+                      "ddpv": "https://datapartnership.org/ddpv-metadata-terms",
+                      "olac": "http://www.language-archives.org/OLAC/1.1/",
+                      "dcat": "http://www.w3.org/ns/dcat#",
+                      "prov": "http://www.w3.org/ns/prov#",
+                      "rai": "http://mlcommons.org/croissant/RAI/",
+                      "rdfs": "http://www.w3.org/2000/01/rdf-schema#"
+                    }
+                  ],
+                  "generatedAt": "2026-03-02T12:00:00.0000000Z",
+                  "samplingInfo": {
+                    "totalMatched": 142,
+                    "limit": 30,
+                    "returned": 30,
+                    "randomSample": true
+                  },
+                  "@graph": [
+                    {
+                      "@type": "sc:Dataset",
+                      "@id": "nation-2024",
+                      "sc:name": "Nation Newspaper 2024",
+                      "sc:temporalCoverage": "2024",
+                      "sc:spatialCoverage": "Malawi",
+                      "sc:inLanguage": "ny",
+                      "sc:creator": {
+                        "@type": "sc:Organization",
+                        "sc:name": "Nation Publications Limited"
+                      },
+                      "sc:publisher": {
+                        "@type": "sc:Organization",
+                        "sc:name": "Nation Publications Limited"
+                      },
+                      "sc:license": "LicenseRef-InternalDemoOnly",
+                      "sc:version": "v1.0.0",
+                      "cr:isLiveDataset": false,
+                      "distribution": [
+                        {
+                          "@type": "cr:FileObject",
+                          "@id": "nation-2024/nation-2024-01-15.pdf",
+                          "sc:name": "nation-2024-01-15.pdf",
+                          "sc:contentUrl": "https://localhost:5001/api/files/file-2024-001005c4",
+                          "sc:encodingFormat": "application/pdf",
+                          "sc:contentSize": 204800,
+                          "cr:sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                          "sc:author": "John Banda",
+                          "sc:datePublished": "2024-01-15",
+                          "sc:dateModified": "2024-01-16",
+                          "sc:inLanguage": "ny",
+                          "sc:numberOfPages": 4,
+                          "sc:wordCount": 1500,
+                          "ddpv:tokenCount": 120,
+                          "ddpv:charCount": 8500,
+                          "dct:subject": "news",
+                          "olac:discourseType": "news article",
+                          "sc:keywords": [
+                            "malaria",
+                            "health"
+                          ],
+                          "dcat:theme": [
+                            "HEALTH",
+                            "DISEASE CONTROL"
+                          ],
+                          "dcat:themeTaxonomy": "https://vocabularyserver.com/unbis/en/index.php"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameters",
+            "content": {
+              "application/ld+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing API key",
+            "content": {
+              "application/ld+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Invalid API key",
+            "content": {
+              "application/ld+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/Datasets/health": {
+      "get": {
+        "tags": [
+          "Datasets"
+        ],
+        "summary": "Health check — returns API status and database file count.",
+        "responses": {
+          "200": {
+            "description": "API is healthy",
+            "content": {
+              "application/ld+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/Files/{id}": {
+      "get": {
+        "tags": [
+          "Files"
+        ],
+        "summary": "Download a file's content as shuffled paragraphs.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The unique file record identifier, e.g. `file-2024-001005c4`",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The file content with paragraphs in randomised order"
+          },
+          "404": {
+            "description": "File record not found or file missing on storage",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Daily download limit reached",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/Seed": {
+      "post": {
+        "tags": [
+          "Seed"
+        ],
+        "summary": "Scan storage (or generate dummy data) and seed the database.",
+        "description": "Two modes are supported:\r\n            \r\n**Scan** (default) — walks the configured storage root.  Each top-level\r\ndirectory becomes a Dataset; all PDF/TXT files beneath it are inserted as\r\nFileRecords with random UNBIS themes and keywords.  Already-present records\r\n(matched by `ContentUrl`) are skipped, so the operation is idempotent.\r\n            \r\n**Dummy** — generates synthetic records without touching the file storage.\r\nUseful for local development when no real files exist.\r\n            \r\n**Authentication**: supply your API key in the `X-Api-Key` header.\r\n            \r\n### Scan example\r\n    POST /api/seed\r\n    { \"mode\": \"Scan\" }\r\n            \r\n### Dummy example\r\n    POST /api/seed\r\n    { \"mode\": \"Dummy\", \"dummyHouses\": \"MediaHouseA,MediaHouseB\", \"dummyFilesPerHouse\": 20 }",
+        "requestBody": {
+          "description": "Seed options",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeedRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeedRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeedRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Seed completed — returns a summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeedResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Invalid API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/Seed/sound": {
+      "post": {
+        "tags": [
+          "Seed"
+        ],
+        "summary": "Scan the sound storage bucket for `*_metadata.jsonld` files and seed the database\r\nwith LlrpApi.DTOs.SoundSeedResult entities.",
+        "description": "Walks every `*_metadata.jsonld` file found in the configured sound bucket/container,\r\nparses the Croissant JSON-LD, and upserts `SoundDataset` + `SoundFileRecord` rows.\r\nAlready-present records (matched by `ContentUrl`) are skipped — the operation is idempotent.\r\n            \r\n### Example\r\n    POST /api/seed/sound",
+        "responses": {
+          "200": {
+            "description": "Sound seed completed — returns a summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoundSeedResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/Seed/reset-db": {
+      "post": {
+        "tags": [
+          "Seed"
+        ],
+        "summary": "Reset API-managed metadata tables by deleting all rows.",
+        "description": "This operation is destructive and intended for development or controlled admin use.\r\nIt deletes data from LRLL API-owned tables only and leaves external/shared tables intact.\r\n            \r\nTo execute, pass `?confirm=true`.\r\n            \r\n### Example\r\n    POST /api/seed/reset-db?confirm=true",
+        "parameters": [
+          {
+            "name": "confirm",
+            "in": "query",
+            "description": "Must be `true` to execute.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Database tables were reset",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResetDbResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing confirmation flag",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/Seed/recreate-schema": {
+      "post": {
+        "tags": [
+          "Seed"
+        ],
+        "summary": "Drop all tables and recreate the EF Core schema via migrations.",
+        "description": "This operation is highly destructive and intended for local development/testing only.\r\nIt drops all tables in the active schema (PostgreSQL) and then recreates EF-managed tables.\r\n            \r\nTo execute, pass `?confirm=true`.\r\n            \r\n### Example\r\n    POST /api/seed/recreate-schema?confirm=true",
+        "parameters": [
+          {
+            "name": "confirm",
+            "in": "query",
+            "description": "Must be `true` to execute.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Schema recreated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecreateSchemaResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing confirmation flag",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sound/query": {
+      "get": {
+        "tags": [
+          "SoundDatasets"
+        ],
+        "summary": "Query sound datasets and receive a Croissant 1.0 JSON-LD document.",
+        "description": "Returns audio file metadata grouped by programme/dataset.\r\nWhen more files match than p.`Limit`, a random sample is returned.\r\n            \r\n### Example\r\n    GET /api/sound/query?language=ny&limit=20",
+        "parameters": [
+          {
+            "name": "Language",
+            "in": "query",
+            "description": "Filter by subject language code or display language identifier (partial, case-insensitive), e.g. `ny` or `en-GB`",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Programme",
+            "in": "query",
+            "description": "Filter by programme / dataset name (partial, case-insensitive)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Keyword",
+            "in": "query",
+            "description": "Filter by keyword stored on the dataset (partial, case-insensitive)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Year",
+            "in": "query",
+            "description": "Filter by year appearing in datePublished or temporalCoverage, e.g. 2025",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "Limit",
+            "in": "query",
+            "description": "Maximum number of audio file entries returned in the JSON-LD output.\r\nWhen more files match than the limit, a random sample is taken.\r\nDefault: 30. Max: 100.",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Croissant 1.0 JSON-LD document"
+          },
+          "400": {
+            "description": "Invalid limit value",
+            "content": {
+              "application/ld+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated",
+            "content": {
+              "application/ld+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient permissions",
+            "content": {
+              "application/ld+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sound/health": {
+      "get": {
+        "tags": [
+          "SoundDatasets"
+        ],
+        "summary": "Returns a simple health check with the total number of sound files in the catalogue.",
+        "responses": {
+          "200": {
+            "description": "Health check response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sound/files/{id}": {
+      "get": {
+        "tags": [
+          "SoundFiles"
+        ],
+        "summary": "Download an audio file by its sound file record ID.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The unique sound file record identifier.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The audio file stream",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Sound file record not found or file missing on storage",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AuthErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "nullable": true,
+            "example": "Unauthorized"
+          },
+          "detail": {
+            "type": "string",
+            "nullable": true,
+            "example": "Missing 'X-Api-Key' header."
+          }
+        },
+        "additionalProperties": false,
+        "description": "Authentication/authorisation error response."
+      },
+      "CroissantResponse": {
+        "type": "object",
+        "properties": {
+          "context": {
+            "type": "array",
+            "items": { },
+            "description": "JSON-LD context array",
+            "nullable": true,
+            "example": [
+              "https://mlcommons.org/working-groups/data/croissant/"
+            ]
+          },
+          "generatedAt": {
+            "type": "string",
+            "description": "UTC timestamp when the response was generated",
+            "nullable": true,
+            "example": "2026-03-02T12:00:00.0000000Z"
+          },
+          "samplingInfo": {
+            "$ref": "#/components/schemas/SamplingInfo"
+          },
+          "graph": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DatasetNode"
+            },
+            "description": "Array of sc:Dataset nodes, one per year",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Croissant 1.0 JSON-LD document returned by the query endpoint."
+      },
+      "DatasetNode": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "nullable": true,
+            "example": "sc:Dataset"
+          },
+          "id": {
+            "type": "string",
+            "nullable": true,
+            "example": "nation-2024"
+          },
+          "scName": {
+            "type": "string",
+            "nullable": true,
+            "example": "Nation Newspaper 2024"
+          },
+          "scTemporalCoverage": {
+            "type": "string",
+            "nullable": true,
+            "example": "2024"
+          },
+          "scSpatialCoverage": {
+            "type": "string",
+            "nullable": true,
+            "example": "Malawi"
+          },
+          "scInLanguage": {
+            "type": "string",
+            "nullable": true,
+            "example": "ny"
+          },
+          "scCreator": {
+            "$ref": "#/components/schemas/OrgNode"
+          },
+          "scPublisher": {
+            "$ref": "#/components/schemas/OrgNode"
+          },
+          "scLicense": {
+            "type": "string",
+            "nullable": true,
+            "example": "LicenseRef-InternalDemoOnly"
+          },
+          "scVersion": {
+            "type": "string",
+            "nullable": true,
+            "example": "v1.0.0"
+          },
+          "crIsLiveDataset": {
+            "type": "boolean",
+            "example": false
+          },
+          "distribution": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FileObjectNode"
+            },
+            "description": "File objects (cr:FileObject) in this dataset",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "A sc:Dataset node representing one year of the corpus."
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "nullable": true,
+            "example": "limit must be between 1 and 100."
+          }
+        },
+        "additionalProperties": false,
+        "description": "Validation error response."
+      },
+      "FileObjectNode": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "nullable": true,
+            "example": "cr:FileObject"
+          },
+          "id": {
+            "type": "string",
+            "nullable": true,
+            "example": "nation-2024/nation-2024-01-15.pdf"
+          },
+          "scName": {
+            "type": "string",
+            "nullable": true,
+            "example": "nation-2024-01-15.pdf"
+          },
+          "scContentUrl": {
+            "type": "string",
+            "nullable": true,
+            "example": "https://localhost:5001/api/files/file-2024-001005c4"
+          },
+          "scEncodingFormat": {
+            "type": "string",
+            "nullable": true,
+            "example": "application/pdf"
+          },
+          "scContentSize": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true,
+            "example": 204800
+          },
+          "crSha256": {
+            "type": "string",
+            "nullable": true,
+            "example": "abc123def456..."
+          },
+          "scAuthor": {
+            "type": "string",
+            "nullable": true,
+            "example": "John Banda"
+          },
+          "scDatePublished": {
+            "type": "string",
+            "nullable": true,
+            "example": "2024-01-15"
+          },
+          "scDateModified": {
+            "type": "string",
+            "nullable": true,
+            "example": "2024-01-16"
+          },
+          "scInLanguage": {
+            "type": "string",
+            "nullable": true,
+            "example": "ny"
+          },
+          "scNumberOfPages": {
+            "type": "integer",
+            "format": "int32",
+            "example": 4
+          },
+          "scWordCount": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "example": 1500
+          },
+          "ddpvTokenCount": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "example": 120
+          },
+          "ddpvCharCount": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "example": 8500
+          },
+          "dctSubject": {
+            "type": "string",
+            "nullable": true,
+            "example": "news"
+          },
+          "olacDiscourseType": {
+            "type": "string",
+            "nullable": true,
+            "example": "news article"
+          },
+          "scKeywords": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Keywords associated with this file",
+            "nullable": true
+          },
+          "dcatTheme": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "UNBIS themes associated with this file",
+            "nullable": true
+          },
+          "dcatThemeTaxonomy": {
+            "type": "string",
+            "nullable": true,
+            "example": "https://vocabularyserver.com/unbis/en/index.php"
+          }
+        },
+        "additionalProperties": false,
+        "description": "A cr:FileObject node representing one PDF."
+      },
+      "HealthResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "nullable": true,
+            "example": "ok"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-03-02T12:00:00Z"
+          },
+          "totalFiles": {
+            "type": "integer",
+            "format": "int32",
+            "example": 1542
+          }
+        },
+        "additionalProperties": false,
+        "description": "Health check response."
+      },
+      "OrgNode": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "nullable": true,
+            "example": "sc:Organization"
+          },
+          "scName": {
+            "type": "string",
+            "nullable": true,
+            "example": "Nation Publications Limited"
+          }
+        },
+        "additionalProperties": false,
+        "description": "A schema.org Organisation reference."
+      },
+      "ProblemDetails": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "detail": {
+            "type": "string",
+            "nullable": true
+          },
+          "instance": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": { }
+      },
+      "RecreateSchemaResult": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "description": "Database provider used for the operation.",
+            "nullable": true
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable summary message.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Summary returned after dropping all tables and recreating schema."
+      },
+      "ResetDbResult": {
+        "type": "object",
+        "properties": {
+          "datasetsDeleted": {
+            "type": "integer",
+            "description": "Number of Dataset rows deleted.",
+            "format": "int32"
+          },
+          "filesDeleted": {
+            "type": "integer",
+            "description": "Number of FileRecord rows deleted.",
+            "format": "int32"
+          },
+          "keywordsDeleted": {
+            "type": "integer",
+            "description": "Number of Keyword rows deleted.",
+            "format": "int32"
+          },
+          "themesDeleted": {
+            "type": "integer",
+            "description": "Number of Theme rows deleted.",
+            "format": "int32"
+          },
+          "soundDatasetsDeleted": {
+            "type": "integer",
+            "description": "Number of SoundDataset rows deleted.",
+            "format": "int32"
+          },
+          "soundFilesDeleted": {
+            "type": "integer",
+            "description": "Number of SoundFileRecord rows deleted.",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable summary message.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Summary returned after resetting API-managed database tables."
+      },
+      "SamplingInfo": {
+        "type": "object",
+        "properties": {
+          "totalMatched": {
+            "type": "integer",
+            "description": "Total files matching the filters",
+            "format": "int32",
+            "example": 142
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Requested limit",
+            "format": "int32",
+            "example": 30
+          },
+          "returned": {
+            "type": "integer",
+            "description": "Number of files actually returned",
+            "format": "int32",
+            "example": 30
+          },
+          "randomSample": {
+            "type": "boolean",
+            "description": "True when returned < totalMatched (random sample was taken)",
+            "example": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Describes how the result set was sampled."
+      },
+      "SeedMode": {
+        "enum": [
+          0,
+          1
+        ],
+        "type": "integer",
+        "description": "Controls how the seed endpoint populates the database.",
+        "format": "int32"
+      },
+      "SeedRequest": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/SeedMode"
+          },
+          "dummyHouses": {
+            "type": "string",
+            "description": "Comma-separated media-house names used in dummy mode only.\r\nDefaults to `MediaHouseA,MediaHouseB,MediaHouseC,MediaHouseD`.",
+            "nullable": true,
+            "example": "MediaHouseA,MediaHouseB"
+          },
+          "dummyFilesPerHouse": {
+            "type": "integer",
+            "description": "Number of synthetic file records per media house (dummy mode only). Default: 40.",
+            "format": "int32",
+            "example": 40
+          }
+        },
+        "additionalProperties": false,
+        "description": "Request body for `POST /api/seed`."
+      },
+      "SeedResult": {
+        "type": "object",
+        "properties": {
+          "datasetsCreated": {
+            "type": "integer",
+            "description": "Number of new Dataset rows created.",
+            "format": "int32"
+          },
+          "filesInserted": {
+            "type": "integer",
+            "description": "Number of new FileRecord rows inserted.",
+            "format": "int32"
+          },
+          "filesSkipped": {
+            "type": "integer",
+            "description": "Files already present in the database that were skipped (scan mode only).",
+            "format": "int32"
+          },
+          "taggerFilesMatched": {
+            "type": "integer",
+            "description": "Number of inserted files whose metadata (themes, keywords, author, title) came from the tagger database.",
+            "format": "int32"
+          },
+          "taggerError": {
+            "type": "string",
+            "description": "Non-null when the tagger database could not be reached or queried; seeded files will have empty metadata.",
+            "nullable": true
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable summary message.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Summary returned after a successful seed operation."
+      },
+      "SoundSeedResult": {
+        "type": "object",
+        "properties": {
+          "datasetsAdded": {
+            "type": "integer",
+            "description": "Number of new SoundDataset rows created.",
+            "format": "int32"
+          },
+          "filesAdded": {
+            "type": "integer",
+            "description": "Number of new SoundFileRecord rows inserted.",
+            "format": "int32"
+          },
+          "filesSkipped": {
+            "type": "integer",
+            "description": "Sound files already present in the database that were skipped.",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable summary message.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Summary returned after a successful sound seed operation."
+      }
+    },
+    "securitySchemes": {
+      "keycloak-oauth2": {
+        "type": "oauth2",
+        "flows": {
+          "authorizationCode": {
+            "authorizationUrl": "http://localhost:8080/realms/myrealm/protocol/openid-connect/auth",
+            "tokenUrl": "http://localhost:8080/realms/myrealm/protocol/openid-connect/token",
+            "scopes": {
+              "openid": "OpenID Connect",
+              "profile": "User profile"
+            }
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "keycloak-oauth2": [
+        "openid"
+      ]
+    }
+  ]
+}

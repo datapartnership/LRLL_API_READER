@@ -1,0 +1,201 @@
+"""Download files referenced in the Croissant JSON-LD and rewrite content URLs."""
+
+from __future__ import annotations
+
+import asyncio
+import copy
+import logging
+import mimetypes
+from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
+
+import httpx
+
+from ddplrll_reader.config import AUTHORIZATION_HEADER
+
+logger = logging.getLogger(__name__)
+
+
+def _first_present(mapping: dict, *keys: str) -> object | None:
+    """Return the first present key from a mapping."""
+    for key in keys:
+        if key in mapping:
+            return mapping[key]
+    return None
+
+
+def _guess_extension(node: dict) -> str:
+    """Choose a local file extension from dataset metadata when possible."""
+    file_name = _first_present(node, "sc:name", "scName")
+    if isinstance(file_name, str):
+        suffix = Path(file_name).suffix
+        if suffix:
+            return suffix
+
+    encoding_format = _first_present(node, "sc:encodingFormat", "scEncodingFormat")
+    if not isinstance(encoding_format, str) or not encoding_format:
+        return ""
+
+    normalized = {
+        "text/markdown": ".md",
+        "application/pdf": ".pdf",
+        "text/plain": ".txt",
+    }.get(encoding_format)
+    if normalized:
+        return normalized
+
+    guessed = mimetypes.guess_extension(encoding_format, strict=False)
+    return guessed or ""
+
+
+def _build_destination(file_id: str, node: dict) -> Path:
+    """Build a local path for a downloaded file using the best available extension."""
+    candidate = Path(file_id)
+    if candidate.suffix:
+        return candidate
+
+    return candidate.with_suffix(_guess_extension(node))
+
+
+def _should_retry_as_http(url: str, exc: Exception) -> bool:
+    """Detect localhost HTTPS URLs that are actually serving plain HTTP."""
+    if "WRONG_VERSION_NUMBER" not in str(exc):
+        return False
+
+    parts = urlsplit(url)
+    return parts.scheme == "https" and parts.hostname in {"localhost", "127.0.0.1", "::1"}
+
+
+def _to_http_url(url: str) -> str:
+    """Rewrite an HTTPS localhost URL to HTTP for a retry."""
+    parts = urlsplit(url)
+    return urlunsplit(("http", parts.netloc, parts.path, parts.query, parts.fragment))
+
+
+async def _download_one(
+    client: httpx.AsyncClient,
+    url: str,
+    dest: Path,
+    semaphore: asyncio.Semaphore,
+) -> Path:
+    """Download a single file, returning the local path."""
+    async with semaphore:
+        download_url = url
+        logger.info("Downloading %s → %s", download_url, dest)
+        try:
+            async with client.stream("GET", download_url) as resp:
+                resp.raise_for_status()
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                with dest.open("wb") as fh:
+                    async for chunk in resp.aiter_bytes(chunk_size=64 * 1024):
+                        fh.write(chunk)
+        except httpx.ConnectError as exc:
+            if not _should_retry_as_http(download_url, exc):
+                raise
+
+            download_url = _to_http_url(download_url)
+            logger.warning("Retrying download over HTTP for localhost URL %s", download_url)
+            async with client.stream("GET", download_url) as resp:
+                resp.raise_for_status()
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                with dest.open("wb") as fh:
+                    async for chunk in resp.aiter_bytes(chunk_size=64 * 1024):
+                        fh.write(chunk)
+    logger.info("  ✓ %s (%s bytes)", dest.name, dest.stat().st_size)
+    return dest
+
+
+def _collect_file_nodes(data: dict) -> list[dict]:
+    """Walk the graph → distribution lists and return every FileObject dict."""
+    nodes: list[dict] = []
+    for dataset in _first_present(data, "@graph", "graph") or []:
+        for fo in dataset.get("distribution", []):
+            if _first_present(fo, "sc:contentUrl", "scContentUrl"):
+                nodes.append(fo)
+    return nodes
+
+
+async def download_files_and_rewrite(
+    data: dict,
+    *,
+    files_dir: Path,
+    api_token: str = "",
+    max_concurrent: int = 5,
+    timeout: float = 120.0,
+    verify_ssl: bool = True,
+) -> dict:
+    """Download every referenced file in *data* and return a **copy** with rewritten URLs.
+
+    Parameters
+    ----------
+    data
+        The raw JSON dict from the API response.
+    files_dir
+        Directory where files will be saved.  Sub-directories per dataset-id
+        are created automatically.
+    api_token
+        Passed as a bearer token in the ``Authorization`` header on each
+        download request.
+    max_concurrent
+        Max simultaneous downloads.
+    timeout
+        Per-request timeout in seconds.
+
+    Returns
+    -------
+    dict
+        A deep copy of *data* with every content URL replaced by the
+        local file path.
+    """
+    result = copy.deepcopy(data)
+    file_nodes = _collect_file_nodes(result)
+
+    if not file_nodes:
+        logger.warning("No file nodes with content URLs found; nothing to download.")
+        return result
+
+    files_dir.mkdir(parents=True, exist_ok=True)
+    semaphore = asyncio.Semaphore(max_concurrent)
+    headers = {AUTHORIZATION_HEADER: f"Bearer {api_token}"} if api_token else {}
+
+    async with httpx.AsyncClient(timeout=timeout, headers=headers, follow_redirects=True, verify=verify_ssl) as client:
+        tasks: list[asyncio.Task] = []
+        node_map: list[tuple[dict, Path]] = []
+
+        for node in file_nodes:
+            url = _first_present(node, "sc:contentUrl", "scContentUrl")
+            file_id = _first_present(node, "@id", "id") or "unknown"
+            dest = files_dir / _build_destination(str(file_id), node)
+
+            node_map.append((node, dest))
+            tasks.append(
+                asyncio.create_task(_download_one(client, url, dest, semaphore))
+            )
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    # Rewrite URLs for successful downloads
+    succeeded = 0
+    failed = 0
+    for (node, dest), res in zip(node_map, results):
+        if isinstance(res, BaseException):
+            logger.error(
+                "Failed to download %s: %s",
+                _first_present(node, "sc:contentUrl", "scContentUrl"),
+                res,
+            )
+            failed += 1
+        else:
+            if "sc:contentUrl" in node:
+                node["sc:contentUrl"] = str(dest)
+            else:
+                node["scContentUrl"] = str(dest)
+            succeeded += 1
+
+    logger.info(
+        "Downloads complete: %d succeeded, %d failed out of %d total.",
+        succeeded,
+        failed,
+        len(file_nodes),
+    )
+    return result

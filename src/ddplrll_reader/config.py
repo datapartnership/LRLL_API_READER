@@ -53,7 +53,11 @@ class Settings(BaseSettings):
     """HTTP timeout in seconds for API requests."""
 
     download_timeout: float = 120.0
-    """HTTP timeout in seconds for file downloads."""
+    """HTTP per-chunk read/connect timeout in seconds for file downloads."""
+
+    file_download_timeout: float = 300.0
+    """Maximum wall-clock seconds allowed for a single file to finish downloading.
+    Audio/video streams that never send EOF will be cancelled after this limit."""
 
     verify_ssl: bool = True
     """Set to False to skip SSL certificate verification (e.g. self-signed certs)."""

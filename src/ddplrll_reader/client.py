@@ -159,6 +159,7 @@ class DdplrllDatasetClient:
                 api_token=self.settings.auth_token,
                 max_concurrent=self.settings.max_concurrent_downloads,
                 timeout=self.settings.download_timeout,
+                file_timeout=self.settings.file_download_timeout,
                 verify_ssl=self.settings.verify_ssl,
             )
 
@@ -174,3 +175,136 @@ class DdplrllDatasetClient:
         """Like :meth:`query` but returns a validated Pydantic model."""
         raw = self.query(**kwargs)
         return CroissantResponse.model_validate(raw)
+
+    # ── sound endpoints ───────────────────────────────────────────────
+
+    def query_sound(
+        self,
+        *,
+        language: str | None = None,
+        programme: str | None = None,
+        keyword: str | None = None,
+        year: int | None = None,
+        limit: int | None = None,
+    ) -> dict:
+        """Query the sound API synchronously and return the raw JSON dict."""
+        return asyncio.run(
+            self.aquery_sound(
+                language=language,
+                programme=programme,
+                keyword=keyword,
+                year=year,
+                limit=limit,
+            )
+        )
+
+    async def aquery_sound(
+        self,
+        *,
+        language: str | None = None,
+        programme: str | None = None,
+        keyword: str | None = None,
+        year: int | None = None,
+        limit: int | None = None,
+    ) -> dict:
+        """Query the sound API asynchronously and return the raw JSON dict."""
+        params: dict[str, str | int] = {}
+        if language:
+            params["Language"] = language
+        if programme:
+            params["Programme"] = programme
+        if keyword:
+            params["Keyword"] = keyword
+        if year:
+            params["Year"] = year
+        lm = limit or self.settings.limit
+        if lm:
+            params["Limit"] = lm
+
+        url = f"{self.settings.api_base_url.rstrip('/')}/api/sound/query"
+        headers = self.settings.auth_headers
+
+        logger.info("GET %s  params=%s", url, params)
+
+        async with httpx.AsyncClient(
+            timeout=self.settings.request_timeout,
+            verify=self.settings.verify_ssl,
+        ) as client:
+            resp = await client.get(url, params=params, headers=headers)
+            resp.raise_for_status()
+            return resp.json()
+
+    def run_sound(
+        self,
+        *,
+        language: str | None = None,
+        programme: str | None = None,
+        keyword: str | None = None,
+        year: int | None = None,
+        limit: int | None = None,
+        output_dir: str | None = None,
+        download: bool | None = None,
+    ) -> Path:
+        """Run the sound pipeline synchronously and return the JSON-LD path."""
+        return asyncio.run(
+            self.arun_sound(
+                language=language,
+                programme=programme,
+                keyword=keyword,
+                year=year,
+                limit=limit,
+                output_dir=output_dir,
+                download=download,
+            )
+        )
+
+    async def arun_sound(
+        self,
+        *,
+        language: str | None = None,
+        programme: str | None = None,
+        keyword: str | None = None,
+        year: int | None = None,
+        limit: int | None = None,
+        output_dir: str | None = None,
+        download: bool | None = None,
+    ) -> Path:
+        """Run the full sound pipeline:
+
+        1. Query /api/sound/query.
+        2. (Optionally) download all audio files referenced in sc:contentUrl.
+        3. Rewrite scContentUrl to point to local files.
+        4. Save the resulting JSON-LD document to output_dir.
+
+        Returns the Path to the saved JSON-LD file.
+        """
+        data = await self.aquery_sound(
+            language=language,
+            programme=programme,
+            keyword=keyword,
+            year=year,
+            limit=limit,
+        )
+
+        out = Path(output_dir or self.settings.output_dir).resolve()
+        out.mkdir(parents=True, exist_ok=True)
+        files_dir = out / "files"
+
+        should_download = download if download is not None else self.settings.download_files
+
+        if should_download:
+            data = await download_files_and_rewrite(
+                data,
+                files_dir=files_dir,
+                api_token=self.settings.auth_token,
+                max_concurrent=self.settings.max_concurrent_downloads,
+                timeout=self.settings.download_timeout,
+                file_timeout=self.settings.file_download_timeout,
+                verify_ssl=self.settings.verify_ssl,
+            )
+
+        jsonld_path = out / "sound_dataset.jsonld"
+        jsonld_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        logger.info("Saved sound JSON-LD → %s", jsonld_path)
+
+        return jsonld_path

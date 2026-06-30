@@ -122,6 +122,7 @@ async def download_files_and_rewrite(
     api_token: str = "",
     max_concurrent: int = 5,
     timeout: float = 120.0,
+    file_timeout: float = 300.0,
     verify_ssl: bool = True,
 ) -> dict:
     """Download every referenced file in *data* and return a **copy** with rewritten URLs.
@@ -139,7 +140,11 @@ async def download_files_and_rewrite(
     max_concurrent
         Max simultaneous downloads.
     timeout
-        Per-request timeout in seconds.
+        Per-chunk httpx read/connect timeout in seconds.
+    file_timeout
+        Maximum wall-clock seconds allowed for a *single* file to finish
+        downloading end-to-end.  Audio streams that never send EOF will be
+        cancelled once this limit is reached.  Default: 300 s.
 
     Returns
     -------
@@ -169,7 +174,12 @@ async def download_files_and_rewrite(
 
             node_map.append((node, dest))
             tasks.append(
-                asyncio.create_task(_download_one(client, url, dest, semaphore))
+                asyncio.create_task(
+                    asyncio.wait_for(
+                        _download_one(client, url, dest, semaphore),
+                        timeout=file_timeout,
+                    )
+                )
             )
 
         results = await asyncio.gather(*tasks, return_exceptions=True)

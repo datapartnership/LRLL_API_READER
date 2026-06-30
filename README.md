@@ -1,7 +1,7 @@
 # DDPLRLL Dataset Reader
 
-Python client for the **Nation Newspaper Dataset API**.  
-Queries Croissant JSON-LD metadata, downloads the referenced PDF files, and saves a local JSON-LD with rewritten file paths.
+Python client for the **Low Resource Language Library API**.  
+Queries Croissant JSON-LD metadata for text and sound datasets, downloads the referenced files, and saves a local JSON-LD with rewritten file paths.
 
 ## Installation
 
@@ -24,15 +24,17 @@ Authentication uses a bearer token from `tokens.json` by default.
 |---|---|---|---|
 | `DDPLRLL_API_BASE_URL` | `--api-url` | `http://localhost:5000` | Base URL of the API |
 | `DDPLRLL_KEYWORD` | `--keyword` | — | Filter by keyword |
-| `DDPLRLL_THEME` | `--theme` | — | Filter by theme |
-| `DDPLRLL_AUTHOR` | `--author` | — | Filter by author |
+| `DDPLRLL_THEME` | `--theme` | — | Filter by theme (text datasets) |
+| `DDPLRLL_AUTHOR` | `--author` | — | Filter by author (text datasets) |
 | `DDPLRLL_YEAR` | `--year` | — | Filter by year |
 | `DDPLRLL_LIMIT` | `--limit` | `30` | Max file entries (1–100) |
 | `DDPLRLL_OUTPUT_DIR` | `--output` | `./output` | Output directory |
-| `DDPLRLL_DOWNLOAD_FILES` | `--no-download` | `true` | Download PDFs |
+| `DDPLRLL_DOWNLOAD_FILES` | `--no-download` | `true` | Download files |
 | `DDPLRLL_MAX_CONCURRENT_DOWNLOADS` | `--concurrency` | `5` | Parallel downloads |
 
 ## CLI Usage
+
+### Text datasets (`run`)
 
 ```bash
 # Refresh tokens.json first
@@ -56,6 +58,37 @@ ddplrll-reader health --api-url http://localhost:5000
 ddplrll-reader run --api-token MY_TOKEN --keyword education
 ```
 
+### Sound datasets (`sound`)
+
+```bash
+# Full pipeline: query + download audio files + save JSON-LD
+ddplrll-reader sound \
+  --api-url http://localhost:5000 \
+  --language ny \
+  --year 2024 \
+  --limit 20 \
+  --output ./sound-output
+
+# Filter by programme name
+ddplrll-reader sound --programme "Radio Chichewa" --limit 50
+
+# Filter by keyword, skip downloading
+ddplrll-reader sound --keyword climate --no-download
+
+# Sound health check
+ddplrll-reader sound-health --api-url http://localhost:5000
+```
+
+#### Sound-specific options
+
+| Flag | Short | Description |
+|---|---|---|
+| `--language` | `-L` | Filter by language code or display language (e.g. `ny`, `en-GB`) |
+| `--programme` | `-p` | Filter by programme / dataset name |
+| `--keyword` | `-K` | Filter by keyword |
+| `--year` | `-y` | Filter by publication year |
+| `--limit` | `-l` | Max audio files returned (1–100, default 30) |
+
 ## Python API
 
 ```python
@@ -72,7 +105,9 @@ settings = Settings(
 
 client = DdplrllDatasetClient(settings)
 
-# Full pipeline: query → download PDFs → save JSON-LD
+# ── Text datasets ─────────────────────────────────────────────
+
+# Full pipeline: query → download PDFs → save dataset.jsonld
 jsonld_path = client.run(keyword="malaria", year="2024", limit=10)
 print(f"Saved to {jsonld_path}")
 
@@ -85,20 +120,30 @@ for dataset in response.graph or []:
     print(dataset.sc_name)
     for f in dataset.distribution or []:
         print(f"  {f.sc_name} → {f.sc_content_url}")
+
+# ── Sound datasets ────────────────────────────────────────────
+
+# Full pipeline: query → download audio files → save sound_dataset.jsonld
+sound_path = client.run_sound(language="ny", year=2024, limit=20)
+print(f"Saved to {sound_path}")
+
+# Query only (returns raw dict)
+sound_data = client.query_sound(language="ny", programme="Radio Chichewa")
 ```
 
 ## Output Structure
 
 ```
 output/
-├── dataset.jsonld          # Croissant JSON-LD with local file paths
+├── dataset.jsonld          # Text dataset Croissant JSON-LD with local file paths
+├── sound_dataset.jsonld    # Sound dataset Croissant JSON-LD with local file paths
 └── files/
     ├── file-2022-465a93ae.pdf
     ├── file-2022-1cafc7a4.pdf
     └── ...
 ```
 
-After downloading, each `scContentUrl` in `dataset.jsonld` is rewritten from the remote URL to the absolute local path, e.g.:
+After downloading, each `scContentUrl` in the JSON-LD is rewritten from the remote URL to the absolute local path, e.g.:
 
 ```
 "scContentUrl": "http://localhost:5000/api/files/file-2022-465a93ae"
@@ -152,15 +197,18 @@ from mlcroissant import Dataset
 # First, refresh tokens.json:
 # python kloakAzure.py
 
-# 1. Query and download
-client = DdplrllDatasetClient(Settings(
-    api_base_url="http://localhost:5000",
-))
-jsonld_path = client.run(keyword="health", year="2023", limit=50)
+client = DdplrllDatasetClient(Settings(api_base_url="http://localhost:5000"))
 
-# 2. Load with mlcroissant
+# Text datasets
+jsonld_path = client.run(keyword="health", year="2023", limit=50)
 ds = Dataset(jsonld=jsonld_path)
 for record in ds.records("default"):
+    print(record)
+
+# Sound datasets
+sound_path = client.run_sound(language="ny", limit=20)
+ds_sound = Dataset(jsonld=sound_path)
+for record in ds_sound.records("default"):
     print(record)
 ```
 

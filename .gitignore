@@ -3,3 +3,4 @@ output
 .venv
 .env
 tokens.json
+sound-output

@@ -435,3 +435,159 @@ def login_oob(
     _print_token_summary(tokens)
     _save_tokens(tokens, token_file)
     return tokens
+
+
+# ---------------------------------------------------------------------------
+# Two-step OOB helpers — avoids input() for VS Code notebooks
+# ---------------------------------------------------------------------------
+
+def login_oob_begin(
+    keycloak_url: str,
+    realm: str,
+    client_id: str,
+    scopes: str = "openid profile email",
+    callback_port: int = 8082,
+    jupyter: bool = True,
+) -> dict:
+    """Step 1 of the OOB flow: generate PKCE parameters and display the login link.
+
+    Returns a session dict that must be passed unchanged to
+    :func:`login_oob_complete` in the next cell.
+
+    Parameters
+    ----------
+    keycloak_url, realm, client_id, scopes, callback_port:
+        Same as :func:`login_oob`.
+    jupyter:
+        When ``True`` (default), displays an HTML login button via IPython.
+    """
+    redirect_uri = f"http://127.0.0.1:{callback_port}/callback"
+
+    code_verifier = generate_code_verifier()
+    code_challenge = generate_code_challenge(code_verifier)
+    state = secrets.token_urlsafe(16)
+
+    auth_url = (
+        f"{keycloak_url}/realms/{realm}/protocol/openid-connect/auth?"
+        + urllib.parse.urlencode(
+            {
+                "client_id": client_id,
+                "redirect_uri": redirect_uri,
+                "response_type": "code",
+                "scope": scopes,
+                "state": state,
+                "code_challenge": code_challenge,
+                "code_challenge_method": "S256",
+            }
+        )
+    )
+
+    if jupyter:
+        try:
+            from IPython.display import HTML, display  # type: ignore[import]
+
+            display(
+                HTML(
+                    "<div style='font-family:sans-serif;padding:12px;border:1px solid #ccc;"
+                    "border-radius:6px;max-width:700px'>"
+                    "<b>Step 1 — Log in via Keycloak</b><br><br>"
+                    f"<a href='{auth_url}' target='_blank' "
+                    "style='background:#0066cc;color:white;padding:8px 16px;"
+                    "border-radius:4px;text-decoration:none;font-size:14px'>"
+                    "&#128274;&nbsp; Click here to log in"
+                    "</a><br><br>"
+                    "<small>"
+                    "After login your browser redirects to "
+                    f"<code>http://127.0.0.1:{callback_port}/callback?code=...</code><br>"
+                    "That page shows a <b>connection error</b> — this is expected.<br>"
+                    "<b>Copy the full URL</b> from the address bar, paste it into "
+                    "<code>REDIRECT_URL</code> in the next cell, and run that cell."
+                    "</small>"
+                    "<hr style='margin:10px 0'>"
+                    "<details>"
+                    "<summary style='cursor:pointer;font-size:12px'>"
+                    "Cannot click the button? Expand for the plain URL"
+                    "</summary>"
+                    f"<code style='word-break:break-all;font-size:11px'>{auth_url}</code>"
+                    "</details></div>"
+                )
+            )
+        except ImportError:
+            print(f"[*] Log in at:\n    {auth_url}\n")
+            print("Copy the redirect URL from your browser and paste it in the next cell.")
+
+    return {
+        "_oob": True,
+        "redirect_uri": redirect_uri,
+        "code_verifier": code_verifier,
+        "state": state,
+        "keycloak_url": keycloak_url,
+        "realm": realm,
+        "client_id": client_id,
+    }
+
+
+def login_oob_complete(
+    session: dict,
+    redirect_url: str,
+    token_file: str = "tokens.json",
+    verify_ssl: bool = True,
+) -> dict:
+    """Step 2 of the OOB flow: exchange the authorization code for tokens.
+
+    Parameters
+    ----------
+    session:
+        The dict returned by :func:`login_oob_begin`.
+    redirect_url:
+        The full redirect URL copied from the browser's address bar after login.
+        Looks like ``http://127.0.0.1:8082/callback?code=...&state=...``.
+    token_file:
+        Path where the token JSON is saved (default: ``"tokens.json"``).
+    verify_ssl:
+        Set to ``False`` to skip SSL certificate verification (e.g. behind a proxy).
+    """
+    if not redirect_url or not redirect_url.strip():
+        raise ValueError(
+            "redirect_url is empty. Paste the full URL from your browser's address bar."
+        )
+
+    parsed = urllib.parse.urlparse(redirect_url.strip())
+    params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
+
+    if "error" in params:
+        raise RuntimeError(
+            f"Keycloak returned an error: {params['error']}\n"
+            f"Description: {params.get('error_description', 'n/a')}"
+        )
+    if params.get("state") != session["state"]:
+        raise ValueError(
+            "State mismatch — the session has expired or the URL is from a different login.\n"
+            "Re-run the previous cell to generate a fresh login link and try again."
+        )
+
+    auth_code = params.get("code")
+    if not auth_code:
+        raise ValueError("No 'code' parameter in URL. Did you paste the correct URL?")
+
+    print(f"[+] Authorization code captured ({auth_code[:12]}...)")
+    print("[*] Exchanging code for tokens ...")
+
+    try:
+        tokens = _exchange_code_for_tokens(
+            auth_code,
+            session["redirect_uri"],
+            session["code_verifier"],
+            session["keycloak_url"],
+            session["realm"],
+            session["client_id"],
+            verify_ssl=verify_ssl,
+        )
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(
+            f"Token exchange failed ({exc.code}): {exc.read().decode()}"
+        ) from exc
+
+    _print_token_summary(tokens)
+    _save_tokens(tokens, token_file)
+    return tokens

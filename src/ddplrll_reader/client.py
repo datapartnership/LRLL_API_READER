@@ -308,3 +308,54 @@ class DdplrllDatasetClient:
         logger.info("Saved sound JSON-LD → %s", jsonld_path)
 
         return jsonld_path
+
+
+def preview_jsonld(jsonld_path: "str | Path") -> None:
+    """Print a summary of a saved Croissant JSON-LD file.
+
+    Shows sampling info (totalMatched, returned, randomSample), the name and
+    file count of the first dataset in ``@graph``, and key metadata fields of
+    the first file entry.  Handles both text and sound field names.
+    """
+
+    def _get(node: dict, *keys: str) -> object:
+        for k in keys:
+            v = node.get(k)
+            if v is not None:
+                return v
+        return None
+
+    with open(jsonld_path, encoding="utf-8") as fh:
+        data = json.load(fh)
+
+    sampling = data.get("samplingInfo", {})
+    print(
+        f"\nMatched: {sampling.get('totalMatched')}  "
+        f"Returned: {sampling.get('returned')}  "
+        f"Random sample: {sampling.get('randomSample')}"
+    )
+
+    first_dataset = (data.get("@graph") or data.get("graph") or [None])[0]
+    if not first_dataset:
+        return
+
+    files = first_dataset.get("distribution", [])
+    print(f"\nDataset : {_get(first_dataset, 'sc:name', 'scName')}")
+    print(f"Files   : {len(files)}")
+
+    if not files:
+        return
+
+    f0 = files[0]
+    print("\nFirst file:")
+    for label, *keys in [
+        ("Name    ", "sc:name", "scName"),
+        ("URL     ", "sc:contentUrl", "scContentUrl"),
+        ("Author  ", "sc:author", "scAuthor"),
+        ("Keywords", "sc:keywords", "scKeywords"),
+        ("Language", "sc:inLanguage", "scInLanguage"),
+        ("Format  ", "sc:encodingFormat", "scEncodingFormat"),
+    ]:
+        val = _get(f0, *keys)
+        if val is not None:
+            print(f"  {label}: {val}")

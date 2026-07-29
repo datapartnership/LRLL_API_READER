@@ -7,6 +7,7 @@ src/ddplrll_dataset_reader.egg-info/entry_points.txt
 src/ddplrll_dataset_reader.egg-info/requires.txt
 src/ddplrll_dataset_reader.egg-info/top_level.txt
 src/ddplrll_reader/__init__.py
+src/ddplrll_reader/auth.py
 src/ddplrll_reader/cli.py
 src/ddplrll_reader/client.py
 src/ddplrll_reader/config.py

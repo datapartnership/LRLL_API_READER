@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     Audio/video streams that never send EOF will be cancelled after this limit."""
 
     verify_ssl: bool = True
-    """Set to False to skip SSL certificate verification (e.g. self-signed certs)."""
+    """Set to False to skip SSL certificate verification (e.g. self-signed certs or corporate proxies)."""  # noqa: E501
 
     @property
     def auth_token(self) -> str:

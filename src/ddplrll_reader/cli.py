@@ -118,13 +118,17 @@ def health(
         str,
         typer.Option("--api-token", "-k", help="Bearer token for authentication."),
     ] = "",
+    no_verify_ssl: Annotated[
+        bool,
+        typer.Option("--no-verify-ssl", help="Skip SSL certificate verification (e.g. behind a proxy)."),
+    ] = False,
 ) -> None:
     """Check the API health endpoint."""
     import httpx
 
     url = f"{api_url.rstrip('/')}/api/Datasets/health"
     headers = {"Authorization": f"Bearer {api_token}"} if api_token else {}
-    resp = httpx.get(url, headers=headers, timeout=10)
+    resp = httpx.get(url, headers=headers, timeout=10, verify=not no_verify_ssl)
     resp.raise_for_status()
     console.print_json(data=resp.json())
 
@@ -222,13 +226,17 @@ def sound_health(
         str,
         typer.Option("--api-token", "-k", help="Bearer token for authentication."),
     ] = "",
+    no_verify_ssl: Annotated[
+        bool,
+        typer.Option("--no-verify-ssl", help="Skip SSL certificate verification (e.g. behind a proxy)."),
+    ] = False,
 ) -> None:
     """Check the sound API health endpoint."""
     import httpx
 
     url = f"{api_url.rstrip('/')}/api/sound/health"
     headers = {"Authorization": f"Bearer {api_token}"} if api_token else {}
-    resp = httpx.get(url, headers=headers, timeout=10)
+    resp = httpx.get(url, headers=headers, timeout=10, verify=not no_verify_ssl)
     resp.raise_for_status()
     console.print_json(data=resp.json())
 

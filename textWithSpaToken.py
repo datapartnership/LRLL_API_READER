@@ -6,28 +6,28 @@ from ddplrll_reader import DdplrllDatasetClient, Settings, preview_jsonld
 
 
 # Set this to the API base URL used by the SPA.
-API_BASE_URL = "http://localhost:5000"
-OUTPUT_DIR = "./output/sound"
-LANGUAGE = "ny"
-YEAR = 2026
-LIMIT = 2
-
+API_BASE_URL = "https://lrllapi.azurewebsites.net"
+OUTPUT_DIR = "./output/text"
 
 def main() -> None:
-    token_file = Path(__file__).with_name("tokens.json")
-    settings = Settings(api_base_url=API_BASE_URL, api_token="", token_file=str(token_file))
+    settings = Settings(
+    api_base_url=API_BASE_URL,
+    output_dir=OUTPUT_DIR,
+    verify_ssl=False,
+)
     if not settings.auth_token:
         raise SystemExit('Paste the LRLL API access token into tokens.json as {"access_token": "..."}.')
 
-    print(f"Token loaded. Querying and downloading up to {LIMIT} sound files...", flush=True)
-    path = DdplrllDatasetClient(settings).run_sound(
-        language=LANGUAGE,
-        year=YEAR,
-        limit=LIMIT,
+    print(f"Token loaded", flush=True)
+    path = DdplrllDatasetClient(settings).run(
+        keyword="malaria",
+        # theme="HEALTH",
+        # author="John Banda",
+        limit=10,
         output_dir=OUTPUT_DIR,
         download=True,
     )
-    print(f"Sound JSON-LD saved to: {path}")
+    print(f"Text JSON-LD saved to: {path}")
     preview_jsonld(path)
 
 

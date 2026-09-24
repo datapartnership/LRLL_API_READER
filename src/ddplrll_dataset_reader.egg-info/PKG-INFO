@@ -6,6 +6,7 @@ License: MIT
 Requires-Python: >=3.10
 Description-Content-Type: text/markdown
 Requires-Dist: httpx>=0.27
+Requires-Dist: msal>=1.30
 Requires-Dist: pydantic>=2.0
 Requires-Dist: pydantic-settings>=2.0
 Requires-Dist: rich>=13.0
@@ -33,9 +34,16 @@ All settings can be provided via **CLI flags**, **environment variables** (prefi
 
 Authentication uses a bearer token from `tokens.json` by default.
 
-1. Run `python kloakAzure.py` first to refresh `tokens.json`.
-2. Run `ddplrll-reader` commands normally (they will read `access_token` from `tokens.json`).
-3. Optionally pass `--api-token` to override the token from `tokens.json` for a single command.
+### Microsoft Entra ID sign-in and notebook queries
+
+1. Register a **Mobile and desktop applications** public client in Microsoft Entra ID with `http://localhost` as its redirect URI.
+2. Give that client delegated permission to the LRLL API's exposed scope (for example, `api://<api-app-id>/access_as_user`) and grant consent as required by your tenant.
+3. Put your tenant ID, desktop client ID, and the API's actual scope in `.env` using `ENTRA_TENANT_ID`, `ENTRA_CLIENT_ID`, and `ENTRA_API_SCOPE` (see `.env.example`).
+4. Run `python kloakAzure.py`. It opens a browser for sign-in, saves `tokens.json`, then runs the notebook's text and sound queries into `output/text` and `output/sound`.
+
+Use `--dataset text` or `--dataset sound` for one query, `--no-download` for metadata only, and `python kloakAzure.py --help` for filters and output paths. The script uses `https://lrllapi.azurewebsites.net` by default; pass `--api-url` for another deployment. It sends the **access token for the API scope**, not an ID token. The API deployment must validate Entra tokens for that scope/audience.
+
+Other `ddplrll-reader` commands read `access_token` from `tokens.json` by default. Run `python kloakAzure.py` again after the token expires, or pass `--api-token` to override it for a single command.
 
 | Env Variable | CLI Flag | Default | Description |
 |---|---|---|---|

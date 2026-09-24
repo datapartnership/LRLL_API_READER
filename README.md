@@ -12,50 +12,84 @@ pip install -e .
 
 ## Configuration
 
-All settings can be provided via **CLI flags**, **environment variables** (prefixed `DDPLRLL_`), or a `.env` file.
+The Python reader loads `DDPLRLL_` settings from environment variables or `.env`. The CLI also accepts the options below; for its API URL, pass `--api-url` or export `DDPLRLL_API_BASE_URL` in your shell.
 
 Authentication uses a bearer token from `tokens.json` by default.
 
-1. Run `python kloakAzure.py` first to refresh `tokens.json`.
-2. Run `ddplrll-reader` commands normally (they will read `access_token` from `tokens.json`).
-3. Optionally pass `--api-token` to override the token from `tokens.json` for a single command.
+### Sound downloads with a token copied from the SPA
 
-| Env Variable | CLI Flag | Default | Description |
-|---|---|---|---|
-| `DDPLRLL_API_BASE_URL` | `--api-url` | `http://localhost:5000` | Base URL of the API |
-| `DDPLRLL_KEYWORD` | `--keyword` | — | Filter by keyword |
-| `DDPLRLL_THEME` | `--theme` | — | Filter by theme (text datasets) |
-| `DDPLRLL_AUTHOR` | `--author` | — | Filter by author (text datasets) |
-| `DDPLRLL_YEAR` | `--year` | — | Filter by year |
-| `DDPLRLL_LIMIT` | `--limit` | `30` | Max file entries (1–100) |
-| `DDPLRLL_OUTPUT_DIR` | `--output` | `./output` | Output directory |
-| `DDPLRLL_DOWNLOAD_FILES` | `--no-download` | `true` | Download files |
-| `DDPLRLL_MAX_CONCURRENT_DOWNLOADS` | `--concurrency` | `5` | Parallel downloads |
+If you cannot change the Entra app registration, paste the **LRLL API access token** into the ignored `tokens.json` file in the project root:
+
+```json
+{"access_token": "PASTE_THE_RAW_LRLL_API_ACCESS_TOKEN_HERE"}
+```
+
+Use only the raw token value, without the `Bearer ` prefix. You can find it in an LRLL API request's `Authorization` header in the browser's Network panel. Do not use an ID token or a Microsoft Graph token. Then run `python soundWithSpaToken.py` from the project root. The script reads `tokens.json` directly; there is no interactive prompt.
+
+The script downloads up to two Chichewa (`ny`) sound files from 2024 to `output/sound/files/` and saves `output/sound/sound_dataset.jsonld`. Edit `API_BASE_URL`, `LANGUAGE`, `YEAR`, and `LIMIT` at the top of the script as needed. Set `API_BASE_URL` to the API host called by the SPA. This flow needs no redirect URI, callback port, or `.env` authentication settings. Replace the token in `tokens.json` when it expires.
+
+### Microsoft Entra ID setup for the CLI
+
+1. Register a public client under **Mobile and desktop applications** in Microsoft Entra ID. Set its redirect URI to `http://localhost` ([Microsoft setup guide](https://learn.microsoft.com/en-us/entra/identity-platform/scenario-desktop-app-configuration)).
+2. Give the client a delegated permission for the LRLL API's exposed scope and grant consent as required. Use that API scope, such as `api://<api-app-id>/access_as_user`, rather than a Microsoft Graph scope ([API scope guide](https://learn.microsoft.com/en-us/entra/identity-platform/scenario-protected-web-api-expose-scopes)). The API deployment must accept Entra access tokens for this scope.
+3. Add these values to `.env` in the project root (see `.env.example`):
+
+   ```dotenv
+   ENTRA_TENANT_ID=<directory-tenant-id>
+   ENTRA_CLIENT_ID=<desktop-client-application-id>
+   ENTRA_API_SCOPE=api://<api-app-id>/<scope-name>
+   ENTRA_CALLBACK_PORT=8081
+   ```
+
+4. From the project root, sign in and save `tokens.json`:
+
+   ```bash
+   python -c "from ddplrll_reader import login_entra; login_entra()"
+   ```
+
+The browser sign-in uses PKCE. `ddplrll-reader run` and `ddplrll-reader sound` then read the saved **access token** from `tokens.json` and send it as a bearer token. Repeat the sign-in command when the token expires. Run commands from the project root so the default token path resolves to the same file. You can use `--api-token` to override it for one command.
+
+`kloakAzure.py` is an alternative that signs in **and** runs the text and sound queries in one command. Use `--dataset text` or `--dataset sound` for one query, `--no-download` for metadata only, and `python kloakAzure.py --help` for filters and output paths. The script uses `https://lrllapi.azurewebsites.net` by default; pass `--api-url` for another deployment.
+
+From Python code, the library also exposes `EntraConfig`, `acquire_api_token`, and `save_token` for separate authentication steps.
+
+| CLI flag | Default | Description |
+|---|---|---|
+| `--api-url` | `http://localhost:5000` | Base URL of the API; can also be set with an exported `DDPLRLL_API_BASE_URL` |
+| `--keyword` | — | Filter by keyword |
+| `--theme` | — | Filter by theme (text datasets) |
+| `--author` | — | Filter by author (text datasets) |
+| `--year` | — | Filter by year |
+| `--limit` | `30` | Max file entries (1–100) |
+| `--output` | `./output` | Output directory |
+| `--no-download` | off | Skip downloading referenced files |
+| `--concurrency` | `5` | Parallel downloads |
 
 ## CLI Usage
+
+The CLI defaults to `http://localhost:5000`, so the Azure examples below specify `--api-url`. You can instead export `DDPLRLL_API_BASE_URL=https://lrllapi.azurewebsites.net` in your shell.
 
 ### Text datasets (`run`)
 
 ```bash
-# Refresh tokens.json first
-python kloakAzure.py
+# Sign in first using the command in "Microsoft Entra ID setup for the CLI".
 
 # Full pipeline: query + download + save JSON-LD
 ddplrll-reader run \
-  --api-url http://localhost:5000 \
+  --api-url https://lrllapi.azurewebsites.net \
   --keyword malaria \
   --year 2024 \
   --limit 10 \
   --output ./my-output
 
 # Query only (no file downloads)
-ddplrll-reader run --keyword health --no-download
+ddplrll-reader run --api-url https://lrllapi.azurewebsites.net --keyword health --no-download
 
 # Health check
-ddplrll-reader health --api-url http://localhost:5000
+ddplrll-reader health --api-url https://lrllapi.azurewebsites.net
 
 # Optional: override token from tokens.json for one command
-ddplrll-reader run --api-token MY_TOKEN --keyword education
+ddplrll-reader run --api-url https://lrllapi.azurewebsites.net --api-token MY_TOKEN --keyword education
 ```
 
 ### Sound datasets (`sound`)
@@ -63,20 +97,20 @@ ddplrll-reader run --api-token MY_TOKEN --keyword education
 ```bash
 # Full pipeline: query + download audio files + save JSON-LD
 ddplrll-reader sound \
-  --api-url http://localhost:5000 \
+  --api-url https://lrllapi.azurewebsites.net \
   --language ny \
   --year 2024 \
   --limit 20 \
   --output ./sound-output
 
 # Filter by programme name
-ddplrll-reader sound --programme "Radio Chichewa" --limit 50
+ddplrll-reader sound --api-url https://lrllapi.azurewebsites.net --programme "Radio Chichewa" --limit 50
 
 # Filter by keyword, skip downloading
-ddplrll-reader sound --keyword climate --no-download
+ddplrll-reader sound --api-url https://lrllapi.azurewebsites.net --keyword climate --no-download
 
 # Sound health check
-ddplrll-reader sound-health --api-url http://localhost:5000
+ddplrll-reader sound-health --api-url https://lrllapi.azurewebsites.net
 ```
 
 #### Sound-specific options
@@ -94,12 +128,11 @@ ddplrll-reader sound-health --api-url http://localhost:5000
 ```python
 from ddplrll_reader import DdplrllDatasetClient, Settings
 
-# First, refresh tokens.json:
-# python kloakAzure.py
+# First, sign in with login_entra() as shown above.
 
 # Configure
 settings = Settings(
-    api_base_url="http://localhost:5000",
+    api_base_url="https://lrllapi.azurewebsites.net",
     output_dir="./output",
 )
 
@@ -194,10 +227,9 @@ for record_set in ds.metadata.record_sets:
 from ddplrll_reader import DdplrllDatasetClient, Settings
 from mlcroissant import Dataset
 
-# First, refresh tokens.json:
-# python kloakAzure.py
+# First, sign in with login_entra() as shown above.
 
-client = DdplrllDatasetClient(Settings(api_base_url="http://localhost:5000"))
+client = DdplrllDatasetClient(Settings(api_base_url="https://lrllapi.azurewebsites.net"))
 
 # Text datasets
 jsonld_path = client.run(keyword="health", year="2023", limit=50)
@@ -290,12 +322,11 @@ print(train_test)
 from ddplrll_reader import DdplrllDatasetClient, Settings
 import pandas as pd
 
-# First, refresh tokens.json:
-# python kloakAzure.py
+# First, sign in with login_entra() as shown above.
 
 # 1. Query and download
 client = DdplrllDatasetClient(Settings(
-    api_base_url="http://localhost:5000",
+    api_base_url="https://lrllapi.azurewebsites.net",
 ))
 jsonld_path = client.run(keyword="health", year="2023", limit=50)
 

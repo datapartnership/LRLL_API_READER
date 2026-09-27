@@ -6,7 +6,7 @@ from ddplrll_reader import DdplrllDatasetClient, Settings, preview_jsonld
 
 
 # Set this to the API base URL used by the SPA.
-API_BASE_URL = "http://localhost:5000"
+API_BASE_URL = "https://lrldtmetadataqa.worldbank.org/"
 OUTPUT_DIR = "./output/sound"
 LANGUAGE = "ny"
 YEAR = 2026

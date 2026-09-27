@@ -1,7 +1,10 @@
 # DDPLRLL Dataset Reader
 
 Python client for the **Low Resource Language Library API**.  
-Queries Croissant JSON-LD metadata for text, audio, and video collections through the single `/api/collections/query` endpoint, downloads the referenced files (including audio/video transcriptions), and saves a local JSON-LD with rewritten file paths.
+It does two things:
+
+- **Sample** (`run`): queries `/api/collections/query` for a random sample of up to 100 text, audio, or video files, downloads them (including audio/video transcriptions), and saves a local JSON-LD with rewritten file paths.
+- **Download whole collections** (`download_collections` / `download-all`): downloads **every** file of each matching audio/video collection as a bundle. See [Downloading whole collections](#downloading-whole-collections).
 
 ## Installation
 
@@ -12,7 +15,7 @@ pip install -e .
 
 ## Configuration
 
-The Python reader loads `DDPLRLL_` settings from environment variables or `.env`. The CLI also accepts the options below; for its API URL, pass `--api-url` or export `DDPLRLL_API_BASE_URL` in your shell.
+The Python reader loads `DDPLRLL_` settings from environment variables or `.env`. The CLI takes its settings as options (see [CLI Usage](#cli-usage)); for its API URL, pass `--api-url` or export `DDPLRLL_API_BASE_URL` in your shell.
 
 ### Authentication: paste your token into `tokens.json`
 
@@ -31,7 +34,11 @@ To get the token:
 
 Do not use an ID token or a Microsoft Graph token. Tokens expire; when requests start failing with `401 Unauthorized`, copy a fresh token and paste it in again. `tokens.json` is git-ignored, so never commit it or share it.
 
-Pasting the token needs no redirect URI, callback port, or `.env` authentication settings. The sign-in helpers described below are optional. They write the same one-field file for you.
+Pasting the token needs no redirect URI, callback port, or `.env` authentication settings. Run commands from the project root so the default `tokens.json` path resolves to the same file. To use a different token for one CLI command, pass `--api-token`.
+
+### Optional: sign in with Keycloak instead of pasting
+
+`kloakAzure.py` signs in through Keycloak. Run `python kloakAzure.py`, log in in the browser window that opens, and the script saves the tokens to `tokens.json`. It only signs you in; to query and download, run `ddplrll-reader` or one of the example scripts afterwards. It uses the `LowResourceLanguageDataTrust` realm at `https://lrllkeyclock.azurewebsites.net` by default. To use another Keycloak host, realm, or client, edit the `CONFIG` values at the top of the script.
 
 ### Example scripts
 
@@ -40,39 +47,33 @@ Run an example script from the project root. It reads `tokens.json` directly; th
 | Script | Query |
 |---|---|
 | `nsoWithSpaToken.py` | **All** audio from the provider `National Statistics Office`, each with its transcript → `output/nso/<collection id>/` (see [Downloading whole collections](#downloading-whole-collections)) |
-| `soundWithSpaToken.py` | Audio in Chichewa (`ny`) → `output/sound/` |
-| `textWithSpaToken.py` | Text files matching `malaria` → `output/text/` |
+| `soundWithSpaToken.py` | A random sample of 2 audio files in Chichewa (`ny`) from 2026 → `output/sound/` |
+| `textWithSpaToken.py` | A random sample of 10 text files matching `malaria` → `output/text/` |
 
-The sound and text scripts save the files to `<output>/files/` and the metadata to `<output>/dataset.jsonld`. Edit the constants at the top of a script as needed. Set `API_BASE_URL` to the API host called by the SPA.
+The sound and text scripts save the files to `<output>/files/` and the metadata to `<output>/dataset.jsonld`. Edit the constants at the top of a script as needed. Set `API_BASE_URL` to the API host called by the SPA, e.g. `https://lrldtmetadataqa.worldbank.org/`.
 
-### Optional: sign in with Microsoft Entra ID instead of pasting
+## CLI Usage
 
-1. Register a public client under **Mobile and desktop applications** in Microsoft Entra ID. Set its redirect URI to `http://localhost` ([Microsoft setup guide](https://learn.microsoft.com/en-us/entra/identity-platform/scenario-desktop-app-configuration)).
-2. Give the client a delegated permission for the LRLL API's exposed scope and grant consent as required. Use that API scope, such as `api://<api-app-id>/access_as_user`, rather than a Microsoft Graph scope ([API scope guide](https://learn.microsoft.com/en-us/entra/identity-platform/scenario-protected-web-api-expose-scopes)). The API deployment must accept Entra access tokens for this scope.
-3. Add these values to `.env` in the project root (see `.env.example`):
+The CLI has three commands:
 
-   ```dotenv
-   ENTRA_TENANT_ID=<directory-tenant-id>
-   ENTRA_CLIENT_ID=<desktop-client-application-id>
-   ENTRA_API_SCOPE=api://<api-app-id>/<scope-name>
-   ENTRA_CALLBACK_PORT=8081
-   ```
+- `run` downloads a **random sample** of up to 100 files of any media type.
+- `download-all` downloads **every** file of each matching audio/video collection.
+- `health` checks that the API is up.
 
-4. From the project root, sign in and save `tokens.json`:
+The CLI defaults to `http://localhost:5000`, so the examples below specify `--api-url`. You can instead export `DDPLRLL_API_BASE_URL=https://lrldtmetadataqa.worldbank.org` in your shell.
 
-   ```bash
-   python -c "from ddplrll_reader import login_entra; login_entra()"
-   ```
+Options shared by all commands:
 
-The browser sign-in uses PKCE. `ddplrll-reader run` then reads the saved **access token** from `tokens.json` and sends it as a bearer token. Repeat the sign-in command when the token expires. Run commands from the project root so the default token path resolves to the same file. You can use `--api-token` to override it for one command.
-
-`kloakAzure.py` is an alternative sign-in that uses Keycloak instead of Entra ID. Run `python kloakAzure.py`, log in in the browser window that opens, and the script saves the tokens to `tokens.json`. It only signs you in; to query and download, run `ddplrll-reader run` or one of the example scripts afterwards. It uses the `LowResourceLanguageDataTrust` realm at `https://lrllkeyclock.azurewebsites.net` by default. To use another Keycloak host, realm, or client, edit the `CONFIG` values at the top of the script.
-
-From Python code, the library also exposes `EntraConfig`, `acquire_api_token`, and `save_token` for separate authentication steps.
-
-| CLI flag | Default | Description |
+| Flag | Default | Description |
 |---|---|---|
-| `--api-url` | `http://localhost:5000` | Base URL of the API; can also be set with an exported `DDPLRLL_API_BASE_URL` |
+| `--api-url`, `-u` | `http://localhost:5000` | Base URL of the API; can also be set with an exported `DDPLRLL_API_BASE_URL` |
+| `--api-token`, `-k` | from `tokens.json` | Bearer token for this command only (`run` and `download-all`) |
+| `--no-verify-ssl` | off | Skip SSL certificate verification (e.g. behind a proxy) |
+
+`run` options:
+
+| Flag | Default | Description |
+|---|---|---|
 | `--media-type`, `-m` | — | `Text`, `Audio`, or `Video` |
 | `--provider`, `-P` | — | Provider name (partial, case-insensitive), e.g. `National Statistics Office` |
 | `--collection-id` | — | Restrict to a single collection |
@@ -81,42 +82,51 @@ From Python code, the library also exposes `EntraConfig`, `acquire_api_token`, a
 | `--theme`, `-t` | — | File or collection theme (partial) |
 | `--author`, `-a` | — | Text file author (partial) |
 | `--year`, `-y` | — | Text publication year, or a year inside the collection's coverage |
-| `--limit` | `30` | Max file entries (1–100). The API returns a **random sample** of this size; to get everything, use `download-all` |
-| `--output` | `./output` | Output directory |
-| `--no-download` | off | Skip downloading referenced files |
-| `--concurrency` | `5` | Parallel downloads |
+| `--limit`, `-l` | `30` | Max file entries (1–100). The API returns a **random sample** of this size; to get everything, use `download-all` |
+| `--output`, `-o` | `./output` | Output directory |
+| `--no-download` | off | Save the JSON-LD only; skip downloading files |
+| `--concurrency`, `-c` | `5` | Parallel downloads |
+| `--file-timeout` | `300` | Max seconds for a single file download |
+| `--verbose`, `-v` | off | Debug logging |
 
-## CLI Usage
+`download-all` options:
 
-The CLI defaults to `http://localhost:5000`, so the Azure examples below specify `--api-url`. You can instead export `DDPLRLL_API_BASE_URL=https://lrllapi.azurewebsites.net` in your shell.
-
-All media types use the same `run` command; filter with `--media-type` and the other options above.
+| Flag | Default | Description |
+|---|---|---|
+| `--media-type`, `-m` | — | `Audio` or `Video`; text collections are always skipped |
+| `--provider`, `-P` | — | Provider name (partial, case-insensitive) |
+| `--language`, `-L` | — | Collection language name or code (partial) |
+| `--theme`, `-t` | — | Collection theme (partial) |
+| `--year`, `-y` | — | A year inside the collection's coverage |
+| `--output`, `-o` | `./output` | Collections are extracted to `<output>/<collection id>/` |
+| `--keep-zip` | off | Keep each collection's ZIP after extracting it |
+| `--verbose`, `-v` | off | Debug logging |
 
 ```bash
 # First, paste your access token into tokens.json (see "Authentication").
 
 # A random sample of 10 files from one provider
 ddplrll-reader run \
-  --api-url https://lrllapi.azurewebsites.net \
+  --api-url https://lrldtmetadataqa.worldbank.org \
   --provider "National Statistics Office" \
   --limit 10 \
   --output ./nso-output
 
 # Text files
-ddplrll-reader run --api-url https://lrllapi.azurewebsites.net --media-type Text --keyword malaria --year 2024
+ddplrll-reader run --api-url https://lrldtmetadataqa.worldbank.org --media-type Text --keyword malaria --year 2024
 
 # Audio in Chichewa, metadata only
-ddplrll-reader run --api-url https://lrllapi.azurewebsites.net --media-type Audio --language nya --no-download
+ddplrll-reader run --api-url https://lrldtmetadataqa.worldbank.org --media-type Audio --language nya --no-download
 
 # Every audio file from one provider, in full (see "Downloading whole collections")
-ddplrll-reader download-all --api-url https://lrllapi.azurewebsites.net \
+ddplrll-reader download-all --api-url https://lrldtmetadataqa.worldbank.org \
   --provider "National Statistics Office" --media-type Audio --output ./nso-output
 
 # Health check
-ddplrll-reader health --api-url https://lrllapi.azurewebsites.net
+ddplrll-reader health --api-url https://lrldtmetadataqa.worldbank.org
 
 # Optional: override token from tokens.json for one command
-ddplrll-reader run --api-url https://lrllapi.azurewebsites.net --api-token MY_TOKEN --keyword education
+ddplrll-reader run --api-url https://lrldtmetadataqa.worldbank.org --api-token MY_TOKEN --keyword education
 ```
 
 ## Python API
@@ -128,7 +138,7 @@ from ddplrll_reader import DdplrllDatasetClient, Settings
 
 # Configure
 settings = Settings(
-    api_base_url="https://lrllapi.azurewebsites.net",
+    api_base_url="https://lrldtmetadataqa.worldbank.org",
     output_dir="./output",
 )
 
@@ -164,7 +174,7 @@ for dataset in response.graph or []:
 3. It extracts the ZIP to `<output>/<collection id>/` and deletes it (pass `keep_zip=True` / `--keep-zip` to keep it).
 
 ```python
-client = DdplrllDatasetClient(Settings(api_base_url="https://lrllapi.azurewebsites.net", output_dir="./output/nso"))
+client = DdplrllDatasetClient(Settings(api_base_url="https://lrldtmetadataqa.worldbank.org", output_dir="./output/nso"))
 
 # Filters: media_type, provider, language, theme, year
 folders = client.download_collections(provider="National Statistics Office", media_type="Audio")
@@ -186,12 +196,14 @@ output/nso/
 
 Notes:
 
-- **Text collections are skipped**; the API cannot bundle them. Download text with `run`, or file by file from `/api/files/{id}`.
+- **Text collections are skipped**; the API cannot bundle them. `run` can only fetch a random sample of up to 100 text files per call; there is no complete text download in this library yet.
 - **Bundles can be several GB** and download as a single stream, one collection at a time. Progress is logged every 500 MB.
 - **Re-running is safe.** Collections whose folder already exists are skipped. An interrupted download restarts that collection from the beginning, because the ZIP is generated on the fly and cannot be resumed.
 - **The access token is checked when each collection's download starts.** If later collections fail with 401, sign in again and re-run; finished collections are skipped.
 
-## Output Structure
+## Output Structure (`run`)
+
+`run` and the sound/text example scripts write:
 
 ```
 output/
@@ -211,59 +223,6 @@ After downloading, each `sc:contentUrl` in the JSON-LD (including those of neste
 "sc:contentUrl": "http://localhost:5000/api/files/file-1a2b3c4d5e6f7a8b"
 →
 "sc:contentUrl": "/Users/you/output/files/report.txt"
-```
-
-## Using with mlcroissant
-
-The saved `dataset.jsonld` is a valid [Croissant 1.0](https://mlcommons.org/croissant/) document.
-Install the `mlcroissant` package to load it directly:
-
-```bash
-pip install mlcroissant
-```
-
-### Load and iterate records
-
-```python
-from mlcroissant import Dataset
-
-ds = Dataset(jsonld=jsonld_path)
-records = ds.records("default")
-
-for record in records:
-    print(record)
-```
-
-### Inspect metadata
-
-```python
-from mlcroissant import Dataset
-
-ds = Dataset(jsonld="output/dataset.jsonld")
-
-# Top-level metadata
-print(ds.metadata.name)
-print(ds.metadata.description)
-
-# List all record sets
-for record_set in ds.metadata.record_sets:
-    print(record_set.name, "–", len(record_set.fields), "fields")
-```
-
-### End-to-end: ddplrll-reader → mlcroissant
-
-```python
-from ddplrll_reader import DdplrllDatasetClient, Settings
-from mlcroissant import Dataset
-
-# First, paste your access token into tokens.json (see "Authentication").
-
-client = DdplrllDatasetClient(Settings(api_base_url="https://lrllapi.azurewebsites.net"))
-
-jsonld_path = client.run(keyword="health", year=2023, limit=50)
-ds = Dataset(jsonld=jsonld_path)
-for record in ds.records("default"):
-    print(record)
 ```
 
 ## Using with pandas
@@ -348,7 +307,7 @@ import pandas as pd
 
 # 1. Query and download
 client = DdplrllDatasetClient(Settings(
-    api_base_url="https://lrllapi.azurewebsites.net",
+    api_base_url="https://lrldtmetadataqa.worldbank.org",
 ))
 jsonld_path = client.run(keyword="health", year=2023, limit=50)
 

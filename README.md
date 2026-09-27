@@ -1,7 +1,7 @@
 # DDPLRLL Dataset Reader
 
 Python client for the **Low Resource Language Library API**.  
-Queries Croissant JSON-LD metadata for text and sound datasets, downloads the referenced files, and saves a local JSON-LD with rewritten file paths.
+Queries Croissant JSON-LD metadata for text, audio, and video collections through the single `/api/collections/query` endpoint, downloads the referenced files (including audio/video transcriptions), and saves a local JSON-LD with rewritten file paths.
 
 ## Installation
 
@@ -14,21 +14,38 @@ pip install -e .
 
 The Python reader loads `DDPLRLL_` settings from environment variables or `.env`. The CLI also accepts the options below; for its API URL, pass `--api-url` or export `DDPLRLL_API_BASE_URL` in your shell.
 
-Authentication uses a bearer token from `tokens.json` by default.
+### Authentication: paste your token into `tokens.json`
 
-### Sound downloads with a token copied from the SPA
-
-If you cannot change the Entra app registration, paste the **LRLL API access token** into the ignored `tokens.json` file in the project root:
+The reader sends a bearer token that it reads from `tokens.json` in the project root. You create this file yourself and paste the token into it by hand. It has exactly one field:
 
 ```json
 {"access_token": "PASTE_THE_RAW_LRLL_API_ACCESS_TOKEN_HERE"}
 ```
 
-Use only the raw token value, without the `Bearer ` prefix. You can find it in an LRLL API request's `Authorization` header in the browser's Network panel. Do not use an ID token or a Microsoft Graph token. Then run `python soundWithSpaToken.py` from the project root. The script reads `tokens.json` directly; there is no interactive prompt.
+To get the token:
 
-The script downloads up to two Chichewa (`ny`) sound files from 2024 to `output/sound/files/` and saves `output/sound/sound_dataset.jsonld`. Edit `API_BASE_URL`, `LANGUAGE`, `YEAR`, and `LIMIT` at the top of the script as needed. Set `API_BASE_URL` to the API host called by the SPA. This flow needs no redirect URI, callback port, or `.env` authentication settings. Replace the token in `tokens.json` when it expires.
+1. Sign in to the web app (SPA) in your browser.
+2. Open the developer tools (**Network** panel) and select any request to the LRLL API.
+3. Copy the value of its `Authorization` request header, **without** the `Bearer ` prefix.
+4. Paste it as the `access_token` value in `tokens.json` and save the file.
 
-### Microsoft Entra ID setup for the CLI
+Do not use an ID token or a Microsoft Graph token. Tokens expire; when requests start failing with `401 Unauthorized`, copy a fresh token and paste it in again. `tokens.json` is git-ignored, so never commit it or share it.
+
+Pasting the token needs no redirect URI, callback port, or `.env` authentication settings. The sign-in helpers described below are optional. They write the same one-field file for you.
+
+### Example scripts
+
+Run an example script from the project root. It reads `tokens.json` directly; there is no interactive prompt.
+
+| Script | Query |
+|---|---|
+| `nsoWithSpaToken.py` | Audio from the provider `National Statistics Office`, each with its transcript → `output/nso/` |
+| `soundWithSpaToken.py` | Audio in Chichewa (`ny`) → `output/sound/` |
+| `textWithSpaToken.py` | Text files matching `malaria` → `output/text/` |
+
+Each script saves the files to `<output>/files/` and the metadata to `<output>/dataset.jsonld`. Edit the constants at the top of a script as needed. Set `API_BASE_URL` to the API host called by the SPA.
+
+### Optional: sign in with Microsoft Entra ID instead of pasting
 
 1. Register a public client under **Mobile and desktop applications** in Microsoft Entra ID. Set its redirect URI to `http://localhost` ([Microsoft setup guide](https://learn.microsoft.com/en-us/entra/identity-platform/scenario-desktop-app-configuration)).
 2. Give the client a delegated permission for the LRLL API's exposed scope and grant consent as required. Use that API scope, such as `api://<api-app-id>/access_as_user`, rather than a Microsoft Graph scope ([API scope guide](https://learn.microsoft.com/en-us/entra/identity-platform/scenario-protected-web-api-expose-scopes)). The API deployment must accept Entra access tokens for this scope.
@@ -47,19 +64,23 @@ The script downloads up to two Chichewa (`ny`) sound files from 2024 to `output/
    python -c "from ddplrll_reader import login_entra; login_entra()"
    ```
 
-The browser sign-in uses PKCE. `ddplrll-reader run` and `ddplrll-reader sound` then read the saved **access token** from `tokens.json` and send it as a bearer token. Repeat the sign-in command when the token expires. Run commands from the project root so the default token path resolves to the same file. You can use `--api-token` to override it for one command.
+The browser sign-in uses PKCE. `ddplrll-reader run` then reads the saved **access token** from `tokens.json` and sends it as a bearer token. Repeat the sign-in command when the token expires. Run commands from the project root so the default token path resolves to the same file. You can use `--api-token` to override it for one command.
 
-`kloakAzure.py` is an alternative that signs in **and** runs the text and sound queries in one command. Use `--dataset text` or `--dataset sound` for one query, `--no-download` for metadata only, and `python kloakAzure.py --help` for filters and output paths. The script uses `https://lrllapi.azurewebsites.net` by default; pass `--api-url` for another deployment.
+`kloakAzure.py` is an alternative sign-in that uses Keycloak instead of Entra ID. Run `python kloakAzure.py`, log in in the browser window that opens, and the script saves the tokens to `tokens.json`. It only signs you in; to query and download, run `ddplrll-reader run` or one of the example scripts afterwards. It uses the `LowResourceLanguageDataTrust` realm at `https://lrllkeyclock.azurewebsites.net` by default. To use another Keycloak host, realm, or client, edit the `CONFIG` values at the top of the script.
 
 From Python code, the library also exposes `EntraConfig`, `acquire_api_token`, and `save_token` for separate authentication steps.
 
 | CLI flag | Default | Description |
 |---|---|---|
 | `--api-url` | `http://localhost:5000` | Base URL of the API; can also be set with an exported `DDPLRLL_API_BASE_URL` |
-| `--keyword` | — | Filter by keyword |
-| `--theme` | — | Filter by theme (text datasets) |
-| `--author` | — | Filter by author (text datasets) |
-| `--year` | — | Filter by year |
+| `--media-type`, `-m` | — | `Text`, `Audio`, or `Video` |
+| `--provider`, `-P` | — | Provider name (partial, case-insensitive), e.g. `National Statistics Office` |
+| `--collection-id` | — | Restrict to a single collection |
+| `--language`, `-L` | — | Collection language name or code (partial), e.g. `nya` |
+| `--keyword`, `-K` | — | File or collection keyword (partial) |
+| `--theme`, `-t` | — | File or collection theme (partial) |
+| `--author`, `-a` | — | Text file author (partial) |
+| `--year`, `-y` | — | Text publication year, or a year inside the collection's coverage |
 | `--limit` | `30` | Max file entries (1–100) |
 | `--output` | `./output` | Output directory |
 | `--no-download` | off | Skip downloading referenced files |
@@ -69,21 +90,23 @@ From Python code, the library also exposes `EntraConfig`, `acquire_api_token`, a
 
 The CLI defaults to `http://localhost:5000`, so the Azure examples below specify `--api-url`. You can instead export `DDPLRLL_API_BASE_URL=https://lrllapi.azurewebsites.net` in your shell.
 
-### Text datasets (`run`)
+All media types use the same `run` command; filter with `--media-type` and the other options above.
 
 ```bash
-# Sign in first using the command in "Microsoft Entra ID setup for the CLI".
+# First, paste your access token into tokens.json (see "Authentication").
 
-# Full pipeline: query + download + save JSON-LD
+# Everything from one provider
 ddplrll-reader run \
   --api-url https://lrllapi.azurewebsites.net \
-  --keyword malaria \
-  --year 2024 \
+  --provider "National Statistics Office" \
   --limit 10 \
-  --output ./my-output
+  --output ./nso-output
 
-# Query only (no file downloads)
-ddplrll-reader run --api-url https://lrllapi.azurewebsites.net --keyword health --no-download
+# Text files
+ddplrll-reader run --api-url https://lrllapi.azurewebsites.net --media-type Text --keyword malaria --year 2024
+
+# Audio in Chichewa, metadata only
+ddplrll-reader run --api-url https://lrllapi.azurewebsites.net --media-type Audio --language nya --no-download
 
 # Health check
 ddplrll-reader health --api-url https://lrllapi.azurewebsites.net
@@ -92,43 +115,12 @@ ddplrll-reader health --api-url https://lrllapi.azurewebsites.net
 ddplrll-reader run --api-url https://lrllapi.azurewebsites.net --api-token MY_TOKEN --keyword education
 ```
 
-### Sound datasets (`sound`)
-
-```bash
-# Full pipeline: query + download audio files + save JSON-LD
-ddplrll-reader sound \
-  --api-url https://lrllapi.azurewebsites.net \
-  --language ny \
-  --year 2024 \
-  --limit 20 \
-  --output ./sound-output
-
-# Filter by programme name
-ddplrll-reader sound --api-url https://lrllapi.azurewebsites.net --programme "Radio Chichewa" --limit 50
-
-# Filter by keyword, skip downloading
-ddplrll-reader sound --api-url https://lrllapi.azurewebsites.net --keyword climate --no-download
-
-# Sound health check
-ddplrll-reader sound-health --api-url https://lrllapi.azurewebsites.net
-```
-
-#### Sound-specific options
-
-| Flag | Short | Description |
-|---|---|---|
-| `--language` | `-L` | Filter by language code or display language (e.g. `ny`, `en-GB`) |
-| `--programme` | `-p` | Filter by programme / dataset name |
-| `--keyword` | `-K` | Filter by keyword |
-| `--year` | `-y` | Filter by publication year |
-| `--limit` | `-l` | Max audio files returned (1–100, default 30) |
-
 ## Python API
 
 ```python
 from ddplrll_reader import DdplrllDatasetClient, Settings
 
-# First, sign in with login_entra() as shown above.
+# First, paste your access token into tokens.json (see "Authentication").
 
 # Configure
 settings = Settings(
@@ -138,50 +130,47 @@ settings = Settings(
 
 client = DdplrllDatasetClient(settings)
 
-# ── Text datasets ─────────────────────────────────────────────
-
-# Full pipeline: query → download PDFs → save dataset.jsonld
-jsonld_path = client.run(keyword="malaria", year="2024", limit=10)
+# Full pipeline: query → download files → save dataset.jsonld
+jsonld_path = client.run(provider="National Statistics Office", limit=10)
 print(f"Saved to {jsonld_path}")
 
+# Filters: media_type, collection_id, provider, language, keyword, theme, author, year, limit
+text_path = client.run(media_type="Text", keyword="malaria", year=2024, output_dir="./output/text")
+audio_path = client.run(media_type="Audio", language="nya", limit=20, output_dir="./output/audio")
+
 # Query only (returns raw dict)
-data = client.query(keyword="health", theme="Education")
+data = client.query(media_type="Text", theme="Education")
 
 # Query with Pydantic validation
 response = client.query_validated(keyword="malaria")
 for dataset in response.graph or []:
-    print(dataset.sc_name)
+    print(dataset.sc_name, dataset.ddpv_media_type)
     for f in dataset.distribution or []:
         print(f"  {f.sc_name} → {f.sc_content_url}")
-
-# ── Sound datasets ────────────────────────────────────────────
-
-# Full pipeline: query → download audio files → save sound_dataset.jsonld
-sound_path = client.run_sound(language="ny", year=2024, limit=20)
-print(f"Saved to {sound_path}")
-
-# Query only (returns raw dict)
-sound_data = client.query_sound(language="ny", programme="Radio Chichewa")
+        if f.ddpv_transcription:
+            print(f"    transcription → {f.ddpv_transcription.sc_content_url}")
 ```
 
 ## Output Structure
 
 ```
 output/
-├── dataset.jsonld          # Text dataset Croissant JSON-LD with local file paths
-├── sound_dataset.jsonld    # Sound dataset Croissant JSON-LD with local file paths
+├── dataset.jsonld          # Croissant JSON-LD with local file paths
 └── files/
-    ├── file-2022-465a93ae.pdf
-    ├── file-2022-1cafc7a4.pdf
+    ├── 1367_combined_seg0001_151267-152333.wav   # audio file
+    ├── 1367_combined_seg0001_151267-152333.txt   # its transcription
+    ├── report.txt                                # text file (served as plain text, even for PDFs)
     └── ...
 ```
 
-After downloading, each `scContentUrl` in the JSON-LD is rewritten from the remote URL to the absolute local path, e.g.:
+Files keep their original `sc:name`, so each recording sits next to its transcript. If two files in one download share a name, the second gets its file id appended (e.g. `report-file-1a2b3c4d5e6f7a8b.txt`).
+
+After downloading, each `sc:contentUrl` in the JSON-LD (including those of nested `ddpv:transcription` objects) is rewritten from the remote URL to the absolute local path, e.g.:
 
 ```
-"scContentUrl": "http://localhost:5000/api/files/file-2022-465a93ae"
+"sc:contentUrl": "http://localhost:5000/api/files/file-1a2b3c4d5e6f7a8b"
 →
-"scContentUrl": "/Users/you/output/files/file-2022-465a93ae.pdf"
+"sc:contentUrl": "/Users/you/output/files/report.txt"
 ```
 
 ## Using with mlcroissant
@@ -227,20 +216,13 @@ for record_set in ds.metadata.record_sets:
 from ddplrll_reader import DdplrllDatasetClient, Settings
 from mlcroissant import Dataset
 
-# First, sign in with login_entra() as shown above.
+# First, paste your access token into tokens.json (see "Authentication").
 
 client = DdplrllDatasetClient(Settings(api_base_url="https://lrllapi.azurewebsites.net"))
 
-# Text datasets
-jsonld_path = client.run(keyword="health", year="2023", limit=50)
+jsonld_path = client.run(keyword="health", year=2023, limit=50)
 ds = Dataset(jsonld=jsonld_path)
 for record in ds.records("default"):
-    print(record)
-
-# Sound datasets
-sound_path = client.run_sound(language="ny", limit=20)
-ds_sound = Dataset(jsonld=sound_path)
-for record in ds_sound.records("default"):
     print(record)
 ```
 
@@ -256,22 +238,22 @@ with open("output/dataset.jsonld") as f:
 
 # Flatten all file objects across every dataset/year into a DataFrame
 rows = []
-for dataset_node in data.get("graph", []):
-    dataset_id = dataset_node.get("id")
-    year = dataset_node.get("scTemporalCoverage")
+for dataset_node in data.get("@graph", []):
+    dataset_id = dataset_node.get("@id")
+    year = dataset_node.get("sc:temporalCoverage")
     for file_obj in dataset_node.get("distribution", []):
         rows.append({
             "dataset_id": dataset_id,
             "year": year,
-            "file_id": file_obj.get("id"),
-            "name": file_obj.get("scName"),
-            "author": file_obj.get("scAuthor"),
-            "local_path": file_obj.get("scContentUrl"),
-            "size_bytes": file_obj.get("scContentSize"),
-            "word_count": file_obj.get("scWordCount"),
-            "token_count": file_obj.get("ddpvTokenCount"),
-            "keywords": file_obj.get("scKeywords"),
-            "themes": file_obj.get("dcatTheme"),
+            "file_id": file_obj.get("@id"),
+            "name": file_obj.get("sc:name"),
+            "author": file_obj.get("sc:author"),
+            "local_path": file_obj.get("sc:contentUrl"),
+            "size_bytes": file_obj.get("sc:contentSize"),
+            "word_count": file_obj.get("sc:wordCount"),
+            "token_count": file_obj.get("ddpv:tokenCount"),
+            "keywords": file_obj.get("sc:keywords"),
+            "themes": file_obj.get("dcat:theme"),
         })
 
 df = pd.DataFrame(rows)
@@ -291,18 +273,18 @@ with open("output/dataset.jsonld") as f:
 
 # Build a flat list of records
 records = []
-for dataset_node in data.get("graph", []):
+for dataset_node in data.get("@graph", []):
     for file_obj in dataset_node.get("distribution", []):
         records.append({
-            "file_id": file_obj["id"],
-            "name": file_obj.get("scName"),
-            "author": file_obj.get("scAuthor"),
-            "year": dataset_node.get("scTemporalCoverage"),
-            "local_path": file_obj.get("scContentUrl"),
-            "word_count": file_obj.get("scWordCount"),
-            "token_count": file_obj.get("ddpvTokenCount"),
-            "keywords": ", ".join(file_obj.get("scKeywords", [])),
-            "themes": ", ".join(file_obj.get("dcatTheme", [])),
+            "file_id": file_obj["@id"],
+            "name": file_obj.get("sc:name"),
+            "author": file_obj.get("sc:author"),
+            "year": dataset_node.get("sc:temporalCoverage"),
+            "local_path": file_obj.get("sc:contentUrl"),
+            "word_count": file_obj.get("sc:wordCount"),
+            "token_count": file_obj.get("ddpv:tokenCount"),
+            "keywords": ", ".join(file_obj.get("sc:keywords", [])),
+            "themes": ", ".join(file_obj.get("dcat:theme", [])),
         })
 
 ds = Dataset.from_list(records)
@@ -322,13 +304,13 @@ print(train_test)
 from ddplrll_reader import DdplrllDatasetClient, Settings
 import pandas as pd
 
-# First, sign in with login_entra() as shown above.
+# First, paste your access token into tokens.json (see "Authentication").
 
 # 1. Query and download
 client = DdplrllDatasetClient(Settings(
     api_base_url="https://lrllapi.azurewebsites.net",
 ))
-jsonld_path = client.run(keyword="health", year="2023", limit=50)
+jsonld_path = client.run(keyword="health", year=2023, limit=50)
 
 # 2. Load into pandas
 import json
@@ -337,14 +319,14 @@ with open(jsonld_path) as f:
 
 rows = [
     {
-        "name": fo.get("scName"),
-        "author": fo.get("scAuthor"),
-        "words": fo.get("scWordCount"),
-        "tokens": fo.get("ddpvTokenCount"),
-        "themes": fo.get("dcatTheme"),
-        "path": fo.get("scContentUrl"),
+        "name": fo.get("sc:name"),
+        "author": fo.get("sc:author"),
+        "words": fo.get("sc:wordCount"),
+        "tokens": fo.get("ddpv:tokenCount"),
+        "themes": fo.get("dcat:theme"),
+        "path": fo.get("sc:contentUrl"),
     }
-    for node in data.get("graph", [])
+    for node in data.get("@graph", [])
     for fo in node.get("distribution", [])
 ]
 df = pd.DataFrame(rows)

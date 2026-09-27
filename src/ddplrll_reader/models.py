@@ -33,6 +33,9 @@ class FileObjectNode(BaseModel):
     sc_keywords: list[str] | None = Field(None, validation_alias=AliasChoices("sc:keywords", "scKeywords"))
     dcat_theme: list[str] | None = Field(None, validation_alias=AliasChoices("dcat:theme", "dcatTheme"))
     dcat_theme_taxonomy: str | None = Field(None, validation_alias=AliasChoices("dcat:themeTaxonomy", "dcatThemeTaxonomy"))
+    ebucore_duration: float | None = Field(None, validation_alias=AliasChoices("ebucore:duration", "ebucoreDuration"))
+    ddpv_bundle_url: str | None = Field(None, validation_alias=AliasChoices("ddpv:bundleUrl", "ddpvBundleUrl"))
+    ddpv_transcription: FileObjectNode | None = Field(None, validation_alias=AliasChoices("ddpv:transcription", "ddpvTranscription"))
 
     model_config = {"populate_by_name": True}
 
@@ -41,11 +44,19 @@ class DatasetNode(BaseModel):
     type: str | None = Field(None, validation_alias=AliasChoices("@type", "type"))
     id: str | None = Field(None, validation_alias=AliasChoices("@id", "id"))
     sc_name: str | None = Field(None, validation_alias=AliasChoices("sc:name", "scName"))
+    sc_description: str | None = Field(None, validation_alias=AliasChoices("sc:description", "scDescription"))
+    ddpv_media_type: str | None = Field(None, validation_alias=AliasChoices("ddpv:mediaType", "ddpvMediaType"))
     sc_temporal_coverage: str | None = Field(None, validation_alias=AliasChoices("sc:temporalCoverage", "scTemporalCoverage"))
     sc_spatial_coverage: str | None = Field(None, validation_alias=AliasChoices("sc:spatialCoverage", "scSpatialCoverage"))
     sc_in_language: str | None = Field(None, validation_alias=AliasChoices("sc:inLanguage", "scInLanguage"))
     sc_creator: OrgNode | None = Field(None, validation_alias=AliasChoices("sc:creator", "scCreator"))
     sc_publisher: OrgNode | None = Field(None, validation_alias=AliasChoices("sc:publisher", "scPublisher"))
+    sc_provider: OrgNode | None = Field(None, validation_alias=AliasChoices("sc:provider", "scProvider"))
+    sc_source_organization: OrgNode | None = Field(None, validation_alias=AliasChoices("sc:sourceOrganization", "scSourceOrganization"))
+    olac_subject_language: dict[str, str | None] | None = Field(None, validation_alias=AliasChoices("olac:subjectLanguage", "olacSubjectLanguage"))
+    sc_keywords: list[str] | None = Field(None, validation_alias=AliasChoices("sc:keywords", "scKeywords"))
+    dcat_theme: list[str] | None = Field(None, validation_alias=AliasChoices("dcat:theme", "dcatTheme"))
+    ddpv_bundle_url: str | None = Field(None, validation_alias=AliasChoices("ddpv:bundleUrl", "ddpvBundleUrl"))
     sc_license: str | None = Field(None, validation_alias=AliasChoices("sc:license", "scLicense"))
     sc_version: str | None = Field(None, validation_alias=AliasChoices("sc:version", "scVersion"))
     cr_is_live_dataset: bool | None = Field(None, validation_alias=AliasChoices("cr:isLiveDataset", "crIsLiveDataset"))
@@ -68,5 +79,8 @@ class CroissantResponse(BaseModel):
     generated_at: str | None = Field(None, alias="generatedAt")
     sampling_info: SamplingInfo | None = Field(None, alias="samplingInfo")
     graph: list[DatasetNode] | None = Field(None, validation_alias=AliasChoices("@graph", "graph"))
+    message: str | None = None
+    """Set instead of ``graph`` when no files matched the filters."""
+    total_matched: int | None = Field(None, alias="totalMatched")
 
     model_config = {"populate_by_name": True}

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ddplrll-dataset-reader"
 version = "0.1.0"
-description = "Python client for the Nation Newspaper Dataset API – queries Croissant JSON-LD metadata and downloads referenced PDF files."
+description = "Python client for the Low Resource Language Library collections API – queries Croissant JSON-LD metadata and downloads referenced text, audio, and video files."
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}

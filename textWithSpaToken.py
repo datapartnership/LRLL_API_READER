@@ -1,4 +1,4 @@
-"""Download a small sound sample using an LRLL API access token in tokens.json."""
+"""Download a small text sample using an LRLL API access token in tokens.json."""
 
 from pathlib import Path
 
@@ -20,6 +20,7 @@ def main() -> None:
 
     print(f"Token loaded", flush=True)
     path = DdplrllDatasetClient(settings).run(
+        media_type="Text",
         keyword="malaria",
         # theme="HEALTH",
         # author="John Banda",

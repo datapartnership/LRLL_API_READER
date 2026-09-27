@@ -38,6 +38,8 @@ def _guess_extension(node: dict) -> str:
 
     normalized = {
         "text/markdown": ".md",
+        "audio/flac": ".flac",
+        "audio/x-flac": ".flac",
         "application/pdf": ".pdf",
         "text/plain": ".txt",
     }.get(encoding_format)
@@ -48,13 +50,22 @@ def _guess_extension(node: dict) -> str:
     return guessed or ""
 
 
-def _build_destination(file_id: str, node: dict) -> Path:
-    """Build a local path for a downloaded file using the best available extension."""
-    candidate = Path(file_id)
-    if candidate.suffix:
-        return candidate
+def _build_destination(file_id: str, node: dict, used: set[str]) -> Path:
+    """Build a local file name from the file's original ``sc:name``.
 
-    return candidate.with_suffix(_guess_extension(node))
+    Falls back to *file_id* when there is no usable name. A name already in *used*
+    (compared case-insensitively) gets the file id appended, e.g. ``a-file-1a2b.wav``.
+    """
+    raw_name = _first_present(node, "sc:name", "scName")
+    name = Path(raw_name.replace("\\", "/")).name if isinstance(raw_name, str) else ""
+    candidate = Path(name if name not in {"", ".", ".."} else file_id)
+    if not candidate.suffix:
+        candidate = Path(candidate.name + _guess_extension(node))
+
+    if candidate.name.lower() in used:
+        candidate = Path(f"{candidate.stem}-{file_id}{candidate.suffix}")
+    used.add(candidate.name.lower())
+    return candidate
 
 
 def _should_retry_as_http(url: str, exc: Exception) -> bool:
@@ -72,6 +83,25 @@ def _to_http_url(url: str) -> str:
     return urlunsplit(("http", parts.netloc, parts.path, parts.query, parts.fragment))
 
 
+def _adjust_for_content_type(dest: Path, content_type: str) -> Path:
+    """Text files are served as plain text (even PDFs), so save them as ``.txt``."""
+    if content_type.split(";")[0].strip() == "text/plain" and dest.suffix not in {".txt", ".md"}:
+        return dest.with_suffix(".txt")
+    return dest
+
+
+async def _stream_to(client: httpx.AsyncClient, url: str, dest: Path) -> Path:
+    """Stream *url* to disk and return the path actually written."""
+    async with client.stream("GET", url) as resp:
+        resp.raise_for_status()
+        dest = _adjust_for_content_type(dest, resp.headers.get("content-type", ""))
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        with dest.open("wb") as fh:
+            async for chunk in resp.aiter_bytes(chunk_size=64 * 1024):
+                fh.write(chunk)
+    return dest
+
+
 async def _download_one(
     client: httpx.AsyncClient,
     url: str,
@@ -80,38 +110,33 @@ async def _download_one(
 ) -> Path:
     """Download a single file, returning the local path."""
     async with semaphore:
-        download_url = url
-        logger.info("Downloading %s → %s", download_url, dest)
+        logger.info("Downloading %s → %s", url, dest)
         try:
-            async with client.stream("GET", download_url) as resp:
-                resp.raise_for_status()
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                with dest.open("wb") as fh:
-                    async for chunk in resp.aiter_bytes(chunk_size=64 * 1024):
-                        fh.write(chunk)
+            dest = await _stream_to(client, url, dest)
         except httpx.ConnectError as exc:
-            if not _should_retry_as_http(download_url, exc):
+            if not _should_retry_as_http(url, exc):
                 raise
 
-            download_url = _to_http_url(download_url)
-            logger.warning("Retrying download over HTTP for localhost URL %s", download_url)
-            async with client.stream("GET", download_url) as resp:
-                resp.raise_for_status()
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                with dest.open("wb") as fh:
-                    async for chunk in resp.aiter_bytes(chunk_size=64 * 1024):
-                        fh.write(chunk)
+            http_url = _to_http_url(url)
+            logger.warning("Retrying download over HTTP for localhost URL %s", http_url)
+            dest = await _stream_to(client, http_url, dest)
     logger.info("  ✓ %s (%s bytes)", dest.name, dest.stat().st_size)
     return dest
 
 
 def _collect_file_nodes(data: dict) -> list[dict]:
-    """Walk the graph → distribution lists and return every FileObject dict."""
+    """Walk the graph → distribution lists and return every FileObject dict.
+
+    Audio/video file objects carry their transcription as a nested FileObject,
+    which is returned too so it gets downloaded alongside the media file.
+    """
     nodes: list[dict] = []
     for dataset in _first_present(data, "@graph", "graph") or []:
         for fo in dataset.get("distribution", []):
-            if _first_present(fo, "sc:contentUrl", "scContentUrl"):
-                nodes.append(fo)
+            transcription = _first_present(fo, "ddpv:transcription", "ddpvTranscription")
+            for node in (fo, transcription):
+                if isinstance(node, dict) and _first_present(node, "sc:contentUrl", "scContentUrl"):
+                    nodes.append(node)
     return nodes
 
 
@@ -165,14 +190,13 @@ async def download_files_and_rewrite(
 
     async with httpx.AsyncClient(timeout=timeout, headers=headers, follow_redirects=True, verify=verify_ssl) as client:
         tasks: list[asyncio.Task] = []
-        node_map: list[tuple[dict, Path]] = []
 
+        used_names: set[str] = set()
         for node in file_nodes:
             url = _first_present(node, "sc:contentUrl", "scContentUrl")
             file_id = _first_present(node, "@id", "id") or "unknown"
-            dest = files_dir / _build_destination(str(file_id), node)
+            dest = files_dir / _build_destination(str(file_id), node, used_names)
 
-            node_map.append((node, dest))
             tasks.append(
                 asyncio.create_task(
                     asyncio.wait_for(
@@ -187,7 +211,7 @@ async def download_files_and_rewrite(
     # Rewrite URLs for successful downloads
     succeeded = 0
     failed = 0
-    for (node, dest), res in zip(node_map, results):
+    for node, res in zip(file_nodes, results):
         if isinstance(res, BaseException):
             logger.error(
                 "Failed to download %s: %s",
@@ -197,9 +221,9 @@ async def download_files_and_rewrite(
             failed += 1
         else:
             if "sc:contentUrl" in node:
-                node["sc:contentUrl"] = str(dest)
+                node["sc:contentUrl"] = str(res)
             else:
-                node["scContentUrl"] = str(dest)
+                node["scContentUrl"] = str(res)
             succeeded += 1
 
     logger.info(

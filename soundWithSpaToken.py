@@ -20,7 +20,8 @@ def main() -> None:
         raise SystemExit('Paste the LRLL API access token into tokens.json as {"access_token": "..."}.')
 
     print(f"Token loaded. Querying and downloading up to {LIMIT} sound files...", flush=True)
-    path = DdplrllDatasetClient(settings).run_sound(
+    path = DdplrllDatasetClient(settings).run(
+        media_type="Audio",
         language=LANGUAGE,
         year=YEAR,
         limit=LIMIT,

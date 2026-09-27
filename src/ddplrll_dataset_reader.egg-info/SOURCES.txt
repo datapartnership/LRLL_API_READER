@@ -12,4 +12,5 @@ src/ddplrll_reader/cli.py
 src/ddplrll_reader/client.py
 src/ddplrll_reader/config.py
 src/ddplrll_reader/downloader.py
+src/ddplrll_reader/entra_auth.py
 src/ddplrll_reader/models.py

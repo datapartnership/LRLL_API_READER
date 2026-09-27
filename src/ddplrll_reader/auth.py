@@ -10,8 +10,8 @@ login_oob()  Out-of-band flow (kloakAzure_notebook, remote Jupyter servers).
              Displays a login link, then waits for you to paste the redirect URL
              from the browser address bar.
 
-Both functions save the tokens to *token_file* (default ``tokens.json``) and
-return the raw token response dict.
+Both functions save the access token to *token_file* (default ``tokens.json``)
+as ``{"access_token": "..."}`` and return the raw token response dict.
 
 Requirements:  Python 3.7+ (stdlib only).
 """
@@ -168,9 +168,13 @@ def _print_token_summary(tokens: dict) -> None:
 
 
 def _save_tokens(tokens: dict, token_file: str) -> None:
-    with open(token_file, "w") as fh:
-        json.dump(tokens, fh, indent=2)
-    print(f"\n  Tokens saved to: {token_file}")
+    """Save only the access token as ``{"access_token": "..."}``, readable by the owner only."""
+    fd = os.open(token_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        json.dump({"access_token": tokens["access_token"]}, fh, indent=2)
+        fh.write("\n")
+    os.chmod(token_file, 0o600)
+    print(f"\n  Access token saved to: {token_file}")
     print("\n[+] Done. Run  ddplrll-reader run  to query the API.")
 
 

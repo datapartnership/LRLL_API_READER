@@ -54,13 +54,9 @@ def acquire_api_token(config: EntraConfig) -> dict:
 
 
 def save_token(result: dict, path: str | Path = "tokens.json") -> None:
-    """Save the access token fields used by the reader, with private file permissions."""
+    """Save the access token as ``{"access_token": "..."}``, with private file permissions."""
     token_path = Path(path)
-    payload = {
-        key: result[key]
-        for key in ("access_token", "token_type", "expires_in")
-        if key in result
-    }
+    payload = {"access_token": result["access_token"]}
     fd = os.open(token_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as stream:
         json.dump(payload, stream, indent=2)

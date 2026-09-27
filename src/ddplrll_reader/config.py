@@ -24,7 +24,7 @@ class Settings(BaseSettings):
 
     # ── API connection ────────────────────────────────────────────────
     api_base_url: str = "http://localhost:5000"
-    """Base URL of the DDPLRLL Dataset API (no trailing slash)."""
+    """Base URL of the collections API (no trailing slash)."""
 
     api_token: str = ""
     """Bearer token sent in the ``Authorization`` header."""
@@ -33,10 +33,15 @@ class Settings(BaseSettings):
     """Path to a JSON file containing an ``access_token`` field."""
 
     # ── Query defaults ────────────────────────────────────────────────
+    media_type: str | None = None
+    """``Text``, ``Audio``, or ``Video``."""
+    collection_id: str | None = None
+    provider: str | None = None
+    language: str | None = None
     keyword: str | None = None
     theme: str | None = None
     author: str | None = None
-    year: str | None = None
+    year: int | None = None
     limit: int = 30
 
     # ── Download behaviour ────────────────────────────────────────────

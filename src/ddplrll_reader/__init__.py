@@ -1,4 +1,4 @@
-"""DDPLRLL Dataset Reader – Python client for the Nation Newspaper Dataset API."""
+"""DDPLRLL Dataset Reader – Python client for the Low Resource Language Library collections API."""
 
 from ddplrll_reader.auth import login, login_oob
 from ddplrll_reader.client import DdplrllDatasetClient, preview_jsonld

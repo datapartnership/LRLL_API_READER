@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import json
 import logging
 import mimetypes
 import shutil
@@ -237,6 +238,64 @@ async def download_files_and_rewrite(
     return result
 
 
+# Characters the API replaces with "_" in bundle entry names (Windows' invalid file name
+# characters; a Linux host only replaces "\0", which the second pass below covers).
+_WINDOWS_INVALID_CHARS = frozenset('<>:"|?*') | frozenset(chr(i) for i in range(32))
+
+
+def _bundle_entry_names(node: dict) -> list[str]:
+    """Return the names the API may have given *node*'s file inside a bundle ZIP.
+
+    Mirrors the API's naming: the base name of ``sc:name`` with invalid characters
+    replaced by ``_`` (the id when nothing is left), prefixed with ``<id>_`` when an
+    earlier file already took the name. The prefixed name comes first because it can
+    only belong to this file.
+    """
+    file_id = str(_first_present(node, "@id", "id") or "")
+    raw_name = _first_present(node, "sc:name", "scName")
+    base = raw_name.replace("\\", "/").rsplit("/", 1)[-1] if isinstance(raw_name, str) else ""
+
+    names: list[str] = []
+    for invalid in (_WINDOWS_INVALID_CHARS, frozenset("\0")):
+        cleaned = "".join("_" if c in invalid else c for c in base).strip()
+        name = file_id if cleaned in {"", ".", ".."} else cleaned
+        names += [f"{file_id}_{name}", name]
+    return list(dict.fromkeys(names))
+
+
+def rewrite_bundle_urls(folder: Path) -> tuple[int, int]:
+    """Point every ``sc:contentUrl`` in ``<folder>/metadata.jsonld`` at its extracted file.
+
+    Covers media files and their nested ``ddpv:transcription`` objects. Files that are not
+    in the folder (e.g. listed in ``MISSING_FILES.txt``) keep their API URL. Safe to run
+    again on an already rewritten document.
+
+    Returns ``(rewritten, not_found)``.
+    """
+    folder = folder.resolve()
+    metadata_path = folder / "metadata.jsonld"
+    data = json.loads(metadata_path.read_text(encoding="utf-8"))
+
+    rewritten = not_found = 0
+    for node in _collect_file_nodes(data):
+        local = next(
+            (folder / n for n in _bundle_entry_names(node) if (folder / n).is_file()), None
+        )
+        if local is None:
+            not_found += 1
+            continue
+        node["sc:contentUrl" if "sc:contentUrl" in node else "scContentUrl"] = str(local)
+        rewritten += 1
+
+    metadata_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    if not_found:
+        logger.warning(
+            "  %d file(s) in %s are not in the bundle and keep their API URL",
+            not_found, metadata_path,
+        )
+    return rewritten, not_found
+
+
 def _extract_zip(zip_path: Path, dest_dir: Path) -> None:
     """Extract *zip_path* into *dest_dir* via a temporary sibling directory.
 
@@ -297,6 +356,8 @@ async def download_bundle(
 
     logger.info("Extracting %s → %s", zip_path.name, dest_dir)
     await asyncio.to_thread(_extract_zip, zip_path, dest_dir)
+    rewritten, _ = await asyncio.to_thread(rewrite_bundle_urls, dest_dir)
+    logger.info("  Rewrote %d content URL(s) in metadata.jsonld to local paths", rewritten)
 
     missing = dest_dir / "MISSING_FILES.txt"
     if missing.exists():

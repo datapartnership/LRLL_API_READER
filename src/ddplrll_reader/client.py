@@ -10,7 +10,11 @@ from pathlib import Path
 import httpx
 
 from ddplrll_reader.config import Settings
-from ddplrll_reader.downloader import download_bundle, download_files_and_rewrite
+from ddplrll_reader.downloader import (
+    download_bundle,
+    download_files_and_rewrite,
+    rewrite_bundle_urls,
+)
 from ddplrll_reader.models import CroissantResponse
 
 logger = logging.getLogger(__name__)
@@ -249,6 +253,8 @@ class DdplrllDatasetClient:
             dest = out / cid
             if dest.exists():
                 logger.info("Skipping %s: already downloaded to %s", cid, dest)
+                # Also fixes folders downloaded before URLs were rewritten.
+                await asyncio.to_thread(rewrite_bundle_urls, dest)
                 folders.append(dest)
                 continue
 

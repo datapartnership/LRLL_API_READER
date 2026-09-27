@@ -172,6 +172,7 @@ for dataset in response.graph or []:
 1. It lists every matching collection from the paged catalog (`/api/catalog/collections`).
 2. For each audio/video collection it downloads the bundle ZIP (`/api/collections/{id}/bundle`), which holds **every** media file followed by its transcription, plus a `metadata.jsonld` Croissant document.
 3. It extracts the ZIP to `<output>/<collection id>/` and deletes it (pass `keep_zip=True` / `--keep-zip` to keep it).
+4. It rewrites every `sc:contentUrl` in `metadata.jsonld`, including those of nested `ddpv:transcription` objects, from the API URL to the absolute path of the extracted file. Files missing from the bundle keep their API URL.
 
 ```python
 client = DdplrllDatasetClient(Settings(api_base_url="https://lrldtmetadataqa.worldbank.org", output_dir="./output/nso"))
@@ -187,7 +188,7 @@ for c in client.list_collections(provider="National Statistics Office"):
 ```
 output/nso/
 └── MW-NYA-NSO-AUD-001/
-    ├── metadata.jsonld        # Croissant JSON-LD for the whole collection
+    ├── metadata.jsonld        # Croissant JSON-LD for the whole collection, with local file paths
     ├── <recording>.wav
     ├── <recording>.txt        # its transcription
     ├── ...
@@ -198,7 +199,7 @@ Notes:
 
 - **Text collections are skipped**; the API cannot bundle them. `run` can only fetch a random sample of up to 100 text files per call; there is no complete text download in this library yet.
 - **Bundles can be several GB** and download as a single stream, one collection at a time. Progress is logged every 500 MB.
-- **Re-running is safe.** Collections whose folder already exists are skipped. An interrupted download restarts that collection from the beginning, because the ZIP is generated on the fly and cannot be resumed.
+- **Re-running is safe.** Collections whose folder already exists are not downloaded again; only their `metadata.jsonld` URLs are rewritten (which also fixes folders downloaded by older versions). An interrupted download restarts that collection from the beginning, because the ZIP is generated on the fly and cannot be resumed.
 - **The access token is checked when each collection's download starts.** If later collections fail with 401, sign in again and re-run; finished collections are skipped.
 
 ## Output Structure (`run`)

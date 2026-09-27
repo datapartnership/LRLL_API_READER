@@ -6,6 +6,8 @@ import asyncio
 import copy
 import logging
 import mimetypes
+import shutil
+import zipfile
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
@@ -233,3 +235,74 @@ async def download_files_and_rewrite(
         len(file_nodes),
     )
     return result
+
+
+def _extract_zip(zip_path: Path, dest_dir: Path) -> None:
+    """Extract *zip_path* into *dest_dir* via a temporary sibling directory.
+
+    *dest_dir* only appears once extraction has finished, so its existence marks a
+    complete download.
+    """
+    staging = dest_dir.with_name(dest_dir.name + ".extracting")
+    shutil.rmtree(staging, ignore_errors=True)
+    with zipfile.ZipFile(zip_path) as zf:
+        zf.extractall(staging)
+    staging.rename(dest_dir)
+
+
+async def download_bundle(
+    url: str,
+    *,
+    dest_dir: Path,
+    api_token: str = "",
+    timeout: float = 120.0,
+    verify_ssl: bool = True,
+    keep_zip: bool = False,
+) -> Path:
+    """Download a collection bundle ZIP from *url* and extract it into *dest_dir*.
+
+    The ZIP streams to ``<dest_dir>.zip.part`` and is renamed once complete, so an
+    interrupted download never looks finished. The bundle has no size limit, so there
+    is no wall-clock cap; *timeout* applies per read/connect.
+
+    Returns *dest_dir*.
+    """
+    zip_path = dest_dir.with_name(dest_dir.name + ".zip")
+    part_path = zip_path.with_name(zip_path.name + ".part")
+    dest_dir.parent.mkdir(parents=True, exist_ok=True)
+    headers = {AUTHORIZATION_HEADER: f"Bearer {api_token}"} if api_token else {}
+
+    if not zip_path.exists():
+        logger.info("Downloading bundle %s → %s", url, zip_path)
+        async with httpx.AsyncClient(
+            timeout=timeout, headers=headers, follow_redirects=True, verify=verify_ssl
+        ) as client:
+            async with client.stream("GET", url) as resp:
+                resp.raise_for_status()
+                written = 0
+                next_report = 500 * 1024 * 1024
+                try:
+                    with part_path.open("wb") as fh:
+                        async for chunk in resp.aiter_bytes(chunk_size=1024 * 1024):
+                            fh.write(chunk)
+                            written += len(chunk)
+                            if written >= next_report:
+                                logger.info("  … %.1f GB received", written / 1024**3)
+                                next_report += 500 * 1024 * 1024
+                except BaseException:
+                    part_path.unlink(missing_ok=True)  # the stream cannot be resumed
+                    raise
+        part_path.rename(zip_path)
+        logger.info("  ✓ %s (%.2f GB)", zip_path.name, zip_path.stat().st_size / 1024**3)
+
+    logger.info("Extracting %s → %s", zip_path.name, dest_dir)
+    await asyncio.to_thread(_extract_zip, zip_path, dest_dir)
+
+    missing = dest_dir / "MISSING_FILES.txt"
+    if missing.exists():
+        count = sum(1 for line in missing.read_text(encoding="utf-8").splitlines() if line.strip())
+        logger.warning("  %d file(s) were missing on the server; see %s", count, missing)
+
+    if not keep_zip:
+        zip_path.unlink()
+    return dest_dir

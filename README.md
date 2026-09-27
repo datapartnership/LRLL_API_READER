@@ -39,11 +39,11 @@ Run an example script from the project root. It reads `tokens.json` directly; th
 
 | Script | Query |
 |---|---|
-| `nsoWithSpaToken.py` | Audio from the provider `National Statistics Office`, each with its transcript → `output/nso/` |
+| `nsoWithSpaToken.py` | **All** audio from the provider `National Statistics Office`, each with its transcript → `output/nso/<collection id>/` (see [Downloading whole collections](#downloading-whole-collections)) |
 | `soundWithSpaToken.py` | Audio in Chichewa (`ny`) → `output/sound/` |
 | `textWithSpaToken.py` | Text files matching `malaria` → `output/text/` |
 
-Each script saves the files to `<output>/files/` and the metadata to `<output>/dataset.jsonld`. Edit the constants at the top of a script as needed. Set `API_BASE_URL` to the API host called by the SPA.
+The sound and text scripts save the files to `<output>/files/` and the metadata to `<output>/dataset.jsonld`. Edit the constants at the top of a script as needed. Set `API_BASE_URL` to the API host called by the SPA.
 
 ### Optional: sign in with Microsoft Entra ID instead of pasting
 
@@ -81,7 +81,7 @@ From Python code, the library also exposes `EntraConfig`, `acquire_api_token`, a
 | `--theme`, `-t` | — | File or collection theme (partial) |
 | `--author`, `-a` | — | Text file author (partial) |
 | `--year`, `-y` | — | Text publication year, or a year inside the collection's coverage |
-| `--limit` | `30` | Max file entries (1–100) |
+| `--limit` | `30` | Max file entries (1–100). The API returns a **random sample** of this size; to get everything, use `download-all` |
 | `--output` | `./output` | Output directory |
 | `--no-download` | off | Skip downloading referenced files |
 | `--concurrency` | `5` | Parallel downloads |
@@ -95,7 +95,7 @@ All media types use the same `run` command; filter with `--media-type` and the o
 ```bash
 # First, paste your access token into tokens.json (see "Authentication").
 
-# Everything from one provider
+# A random sample of 10 files from one provider
 ddplrll-reader run \
   --api-url https://lrllapi.azurewebsites.net \
   --provider "National Statistics Office" \
@@ -107,6 +107,10 @@ ddplrll-reader run --api-url https://lrllapi.azurewebsites.net --media-type Text
 
 # Audio in Chichewa, metadata only
 ddplrll-reader run --api-url https://lrllapi.azurewebsites.net --media-type Audio --language nya --no-download
+
+# Every audio file from one provider, in full (see "Downloading whole collections")
+ddplrll-reader download-all --api-url https://lrllapi.azurewebsites.net \
+  --provider "National Statistics Office" --media-type Audio --output ./nso-output
 
 # Health check
 ddplrll-reader health --api-url https://lrllapi.azurewebsites.net
@@ -150,6 +154,42 @@ for dataset in response.graph or []:
         if f.ddpv_transcription:
             print(f"    transcription → {f.ddpv_transcription.sc_content_url}")
 ```
+
+## Downloading whole collections
+
+`run` and `query` use `/api/collections/query`, which returns a **random sample** of at most 100 files per call; repeated calls overlap and never guarantee a complete set. To download everything, use `download_collections` (or `ddplrll-reader download-all`):
+
+1. It lists every matching collection from the paged catalog (`/api/catalog/collections`).
+2. For each audio/video collection it downloads the bundle ZIP (`/api/collections/{id}/bundle`), which holds **every** media file followed by its transcription, plus a `metadata.jsonld` Croissant document.
+3. It extracts the ZIP to `<output>/<collection id>/` and deletes it (pass `keep_zip=True` / `--keep-zip` to keep it).
+
+```python
+client = DdplrllDatasetClient(Settings(api_base_url="https://lrllapi.azurewebsites.net", output_dir="./output/nso"))
+
+# Filters: media_type, provider, language, theme, year
+folders = client.download_collections(provider="National Statistics Office", media_type="Audio")
+
+# Just list what would be downloaded
+for c in client.list_collections(provider="National Statistics Office"):
+    print(c["id"], c["mediaType"], c["items"], "files")
+```
+
+```
+output/nso/
+└── MW-NYA-NSO-AUD-001/
+    ├── metadata.jsonld        # Croissant JSON-LD for the whole collection
+    ├── <recording>.wav
+    ├── <recording>.txt        # its transcription
+    ├── ...
+    └── MISSING_FILES.txt      # only if some files were missing on the server
+```
+
+Notes:
+
+- **Text collections are skipped**; the API cannot bundle them. Download text with `run`, or file by file from `/api/files/{id}`.
+- **Bundles can be several GB** and download as a single stream, one collection at a time. Progress is logged every 500 MB.
+- **Re-running is safe.** Collections whose folder already exists are skipped. An interrupted download restarts that collection from the beginning, because the ZIP is generated on the fly and cannot be resumed.
+- **The access token is checked when each collection's download starts.** If later collections fail with 401, sign in again and re-run; finished collections are skipped.
 
 ## Output Structure
 

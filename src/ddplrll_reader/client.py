@@ -10,7 +10,7 @@ from pathlib import Path
 import httpx
 
 from ddplrll_reader.config import Settings
-from ddplrll_reader.downloader import download_files_and_rewrite
+from ddplrll_reader.downloader import download_bundle, download_files_and_rewrite
 from ddplrll_reader.models import CroissantResponse
 
 logger = logging.getLogger(__name__)
@@ -152,6 +152,125 @@ class DdplrllDatasetClient:
         logger.info("Saved JSON-LD → %s", jsonld_path)
 
         return jsonld_path
+
+    # ── whole collections ────────────────────────────────────────────
+
+    def list_collections(self, **filters) -> list[dict]:
+        """List matching collections synchronously.
+
+        Accepts the same filters as :meth:`alist_collections`.
+        """
+        return asyncio.run(self.alist_collections(**filters))
+
+    async def alist_collections(
+        self,
+        *,
+        media_type: str | None = None,
+        provider: str | None = None,
+        language: str | None = None,
+        theme: str | None = None,
+        year: int | None = None,
+    ) -> list[dict]:
+        """Return every collection matching the filters, walking all catalog pages.
+
+        Uses ``/api/catalog/collections``, which is paged in a stable order, so unlike
+        :meth:`aquery` the result is complete rather than a random sample.
+        """
+        s = self.settings
+        filters: dict[str, str | int | None] = {
+            "MediaType": media_type or s.media_type,
+            "Provider": provider or s.provider,
+            "Language": language or s.language,
+            "Theme": theme or s.theme,
+            "Year": year or s.year,
+        }
+        params: dict[str, str | int] = {k: v for k, v in filters.items() if v}
+        url = f"{s.api_base_url.rstrip('/')}/api/catalog/collections"
+
+        collections: list[dict] = []
+        async with httpx.AsyncClient(timeout=s.request_timeout, verify=s.verify_ssl) as client:
+            page = 1
+            while True:
+                logger.info("GET %s  params=%s page=%d", url, params, page)
+                resp = await client.get(
+                    url, params={**params, "Page": page, "PageSize": 50}, headers=s.auth_headers
+                )
+                resp.raise_for_status()
+                body = resp.json()
+                collections.extend(body.get("results", []))
+                if page >= body.get("totalPages", 0):
+                    return collections
+                page += 1
+
+    def download_collections(self, **kwargs) -> list[Path]:
+        """Download whole collections synchronously.
+
+        Accepts the same arguments as :meth:`adownload_collections`.
+        """
+        return asyncio.run(self.adownload_collections(**kwargs))
+
+    async def adownload_collections(
+        self,
+        *,
+        output_dir: str | None = None,
+        keep_zip: bool = False,
+        **filters,
+    ) -> list[Path]:
+        """Download **every** file of every matching audio/video collection.
+
+        Each collection's bundle (``/api/collections/{id}/bundle``) holds all its media
+        files, each followed by its transcription, plus a ``metadata.jsonld`` Croissant
+        document. It is extracted to ``<output_dir>/<collection id>/``.
+
+        ``filters`` are passed to :meth:`alist_collections`. Text collections cannot be
+        bundled by the API and are skipped with a warning. Collections whose folder
+        already exists are skipped, so an interrupted run can simply be restarted.
+
+        Returns the extracted collection folders. Raises ``RuntimeError`` after trying
+        every collection if any of them failed.
+        """
+        s = self.settings
+        out = Path(output_dir or s.output_dir).resolve()
+        collections = await self.alist_collections(**filters)
+        if not collections:
+            logger.warning("No collections matched %s.", filters)
+            return []
+
+        folders: list[Path] = []
+        failed: list[str] = []
+        for c in collections:
+            cid, name = c["id"], c.get("name", "")
+            if c.get("mediaType") == "Text":
+                logger.warning(
+                    "Skipping text collection %s (%s): the API cannot bundle text.", cid, name
+                )
+                continue
+
+            dest = out / cid
+            if dest.exists():
+                logger.info("Skipping %s: already downloaded to %s", cid, dest)
+                folders.append(dest)
+                continue
+
+            logger.info("Collection %s – %s (%s files)", cid, name, c.get("items", "?"))
+            try:
+                folders.append(
+                    await download_bundle(
+                        f"{s.api_base_url.rstrip('/')}/api/collections/{cid}/bundle",
+                        dest_dir=dest,
+                        api_token=s.auth_token,
+                        timeout=s.download_timeout,
+                        verify_ssl=s.verify_ssl,
+                        keep_zip=keep_zip,
+                    )
+                )
+            except Exception as exc:  # keep going; report every failure at the end
+                logger.error("Failed to download collection %s: %s", cid, exc)
+                failed.append(cid)
+
+        if failed:
+            raise RuntimeError(f"Failed to download collection(s): {', '.join(failed)}")
+        return folders
 
     # ── validated query ───────────────────────────────────────────────
 

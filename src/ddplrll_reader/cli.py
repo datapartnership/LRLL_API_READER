@@ -128,6 +128,72 @@ def run(
     console.print(f"\n[bold green]✓[/] JSON-LD saved to [cyan]{jsonld_path}[/]")
 
 
+@app.command("download-all")
+def download_all(
+    api_url: Annotated[
+        str,
+        typer.Option("--api-url", "-u", envvar="DDPLRLL_API_BASE_URL", help="Base URL of the API."),
+    ] = "http://localhost:5000",
+    api_token: Annotated[
+        str,
+        typer.Option("--api-token", "-k", help="Bearer token for authentication."),
+    ] = "",
+    media_type: Annotated[
+        Optional[str],
+        typer.Option("--media-type", "-m", help="Audio or Video (text collections are skipped)."),
+    ] = None,
+    provider: Annotated[
+        Optional[str],
+        typer.Option("--provider", "-P", help="Filter by provider (partial, case-insensitive)."),
+    ] = None,
+    language: Annotated[
+        Optional[str],
+        typer.Option("--language", "-L", help="Filter by language name or code (e.g. nya)."),
+    ] = None,
+    theme: Annotated[
+        Optional[str],
+        typer.Option("--theme", "-t", help="Filter by theme."),
+    ] = None,
+    year: Annotated[
+        Optional[int],
+        typer.Option("--year", "-y", help="Filter to collections covering this year."),
+    ] = None,
+    output_dir: Annotated[
+        str,
+        typer.Option("--output", "-o", help="Directory to extract collections into."),
+    ] = "./output",
+    keep_zip: Annotated[
+        bool,
+        typer.Option("--keep-zip", help="Keep each collection's ZIP after extracting it."),
+    ] = False,
+    no_verify_ssl: Annotated[
+        bool,
+        typer.Option("--no-verify-ssl", help="Skip SSL certificate verification."),
+    ] = False,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Enable debug logging."),
+    ] = False,
+) -> None:
+    """Download every file of every matching audio/video collection (no limit, no sampling)."""
+    _setup_logging(verbose)
+
+    settings = Settings(api_base_url=api_url, api_token=api_token, verify_ssl=not no_verify_ssl)
+    client = DdplrllDatasetClient(settings)
+    folders = client.download_collections(
+        output_dir=output_dir,
+        keep_zip=keep_zip,
+        media_type=media_type,
+        provider=provider,
+        language=language,
+        theme=theme,
+        year=year,
+    )
+
+    for folder in folders:
+        console.print(f"[bold green]✓[/] Collection saved to [cyan]{folder}[/]")
+
+
 @app.command()
 def health(
     api_url: Annotated[

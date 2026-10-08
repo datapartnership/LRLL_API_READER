@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from ddplrll_reader import DdplrllDatasetClient, Settings, preview_jsonld
+from ddplrll_reader import DdplrllDatasetClient, Settings, preview_jsonld, print_token_user
 
 
 # Set this to the API base URL used by the SPA.
@@ -19,10 +19,11 @@ def main() -> None:
         raise SystemExit('Paste the LRLL API access token into tokens.json as {"access_token": "..."}.')
 
     print(f"Token loaded", flush=True)
+    print_token_user(settings.auth_token)
     path = DdplrllDatasetClient(settings).run(
         media_type="Text",
-        keyword="malaria",
-        # theme="HEALTH",
+        # keyword="malaria",
+         theme="HEALTH",
         # author="John Banda",
         limit=10,
         output_dir=OUTPUT_DIR,

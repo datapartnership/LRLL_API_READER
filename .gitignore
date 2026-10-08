@@ -4,3 +4,5 @@ output
 .env
 tokens.json
 sound-output
+.pytest_cache/
+.ruff_cache/

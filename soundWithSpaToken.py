@@ -2,8 +2,7 @@
 
 from pathlib import Path
 
-from ddplrll_reader import DdplrllDatasetClient, Settings, preview_jsonld
-
+from ddplrll_reader import DdplrllDatasetClient, Settings, preview_jsonld, print_token_user
 
 # Set this to the API base URL used by the SPA.
 API_BASE_URL = "https://lrldtmetadataqa.worldbank.org/"
@@ -20,6 +19,7 @@ def main() -> None:
         raise SystemExit('Paste the LRLL API access token into tokens.json as {"access_token": "..."}.')
 
     print(f"Token loaded. Querying and downloading up to {LIMIT} sound files...", flush=True)
+    print_token_user(settings.auth_token)
     path = DdplrllDatasetClient(settings).run(
         media_type="Audio",
         language=LANGUAGE,

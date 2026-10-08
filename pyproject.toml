@@ -27,5 +27,8 @@ ddplrll-reader = "ddplrll_reader.cli:app"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+ddplrll_reader = ["entra_spa.html", "entra_spa.js"]
+
 [tool.ruff]
 line-length = 100

@@ -36,19 +36,89 @@ Do not use an ID token or a Microsoft Graph token. Tokens expire; when requests 
 
 Pasting the token needs no redirect URI, callback port, or `.env` authentication settings. Run commands from the project root so the default `tokens.json` path resolves to the same file. To use a different token for one CLI command, pass `--api-token`.
 
+### Optional: Microsoft Entra SPA browser sign-in
+
+For an Entra app registered as a **Single-page application**, run:
+
+```bash
+python textWithSpaAuth.py
+# Or download a sound sample using the same browser sign-in:
+python soundWithSpaAuth.py
+```
+
+Set these in `.env` or the environment (see `.env.example`):
+
+```dotenv
+ENTRA_TENANT_ID=YOUR_TENANT_ID
+ENTRA_CLIENT_ID=YOUR_SPA_CLIENT_ID
+ENTRA_API_SCOPE=api://YOUR_API_APP_ID/access_as_user
+ENTRA_SPA_REDIRECT_URI=http://localhost:5173/callback
+ENTRA_SPA_TIMEOUT_SECONDS=300
+```
+
+Use the delegated **LRLL API** scope granted to your app, not a Microsoft Graph
+scope. The redirect URI must be registered exactly under the SPA platform. Stop
+any development server using port **5173** first; the helper cannot silently use
+another unregistered port. Other registered `http://localhost:<port>` callbacks
+are supported, including a root callback such as `http://localhost:5071`.
+
+Python hosts a temporary loopback-only page and opens your default browser.
+The page uses authorization code flow with PKCE, validates OAuth state, and
+redeems the code **in the real browser**. It sends the access token back to
+Python through a protected, one-time local handoff. No client secret, browser
+impersonation headers, JavaScript build, or additional dependencies are needed.
+The browser must be able to reach `login.microsoftonline.com`, and Entra consent
+and tenant policies still apply. Browser authentication always uses normal TLS
+validation; the example's API SSL setting does not affect sign-in.
+
+The SPA sign-in scripts sign in on each run and use the token in memory to download
+the same samples as their `WithSpaToken` counterparts. They do **not** overwrite
+`tokens.json`. The text SPA examples and all sound examples print the user's name
+and username from the access token when
+available, falling back to a user ID or an explicit unavailable message. These
+JWT claims are decoded for display only, not verified or used for authorization;
+loading a pasted token does not establish that it is valid or unexpired.
+The token itself is never printed.
+Keep the sign-in tab open until it reports completion. Closing it early leads
+to a timeout; restart the script or use Ctrl+C to cancel. Errors and the default
+five-minute timeout are reported in the terminal. Tokens are not automatically
+refreshed; sign in again when a fresh token is needed.
+
+For other Python workflows:
+
+```python
+from ddplrll_reader import EntraConfig, acquire_api_token_spa, login_entra_spa
+
+result = acquire_api_token_spa(EntraConfig())  # Token in memory only
+token = result["access_token"]
+
+# Alternatively, explicitly sign in and save an access token to tokens.json.
+# login_entra_spa(EntraConfig())
+```
+
+Existing `acquire_api_token` / `login_entra` use **MSAL Python's desktop flow**.
+They require a Mobile and desktop applications redirect registration and use
+`ENTRA_CALLBACK_PORT`; that setting does not control the SPA callback. A desktop
+flow cannot redeem a code for a SPA-only redirect URI. See Microsoft's
+[SPA redirect requirements](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-auth-code-flow#redirect-uris-for-single-page-apps-spas).
+
 ### Optional: sign in with Keycloak instead of pasting
 
 `kloakAzure.py` signs in through Keycloak. Run `python kloakAzure.py`, log in in the browser window that opens, and the script saves the tokens to `tokens.json`. It only signs you in; to query and download, run `ddplrll-reader` or one of the example scripts afterwards. It uses the `LowResourceLanguageDataTrust` realm at `https://lrllkeyclock.azurewebsites.net` by default. To use another Keycloak host, realm, or client, edit the `CONFIG` values at the top of the script.
 
 ### Example scripts
 
-Run an example script from the project root. It reads `tokens.json` directly; there is no interactive prompt.
+Run an example script from the project root. The `WithSpaToken` examples read
+`tokens.json` directly; there is no interactive prompt. `textWithSpaAuth.py` and
+`soundWithSpaAuth.py` instead sign in through the browser.
 
 | Script | Query |
 |---|---|
 | `nsoWithSpaToken.py` | **All** audio from the provider `National Statistics Office`, each with its transcript → `output/nso/<collection id>/` (see [Downloading whole collections](#downloading-whole-collections)) |
 | `soundWithSpaToken.py` | A random sample of 2 audio files in Chichewa (`ny`) from 2026 → `output/sound/` |
+| `soundWithSpaAuth.py` | Browser SPA sign-in, then the same 2-file sound sample → `output/sound/` |
 | `textWithSpaToken.py` | A random sample of 10 text files matching `malaria` → `output/text/` |
+| `textWithSpaAuth.py` | Browser SPA sign-in, then the same 10-file text sample → `output/text/` |
 
 The sound and text scripts save the files to `<output>/files/` and the metadata to `<output>/dataset.jsonld`. Edit the constants at the top of a script as needed. Set `API_BASE_URL` to the API host called by the SPA, e.g. `https://lrldtmetadataqa.worldbank.org/`.
 

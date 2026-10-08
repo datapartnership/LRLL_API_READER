@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import os
+from collections.abc import Mapping
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -18,10 +21,11 @@ class EntraConfig(BaseSettings):
     client_id: str = ""
     api_scope: str = ""
     callback_port: int = 8081
+    spa_redirect_uri: str = "http://localhost:5173/callback"
+    spa_timeout_seconds: float = 300.0
 
 
-def acquire_api_token(config: EntraConfig) -> dict:
-    """Get a delegated API access token using MSAL's browser and PKCE flow."""
+def _validate_required_settings(config: EntraConfig) -> None:
     missing = [
         name for name in ("tenant_id", "client_id", "api_scope")
         if not getattr(config, name).strip()
@@ -29,6 +33,11 @@ def acquire_api_token(config: EntraConfig) -> dict:
     if missing:
         names = ", ".join(f"ENTRA_{name.upper()}" for name in missing)
         raise ValueError(f"Set {names} in .env or the environment before signing in.")
+
+
+def acquire_api_token(config: EntraConfig) -> dict:
+    """Get a delegated API access token using MSAL's browser and PKCE flow."""
+    _validate_required_settings(config)
     if not 1 <= config.callback_port <= 65535:
         raise ValueError("ENTRA_CALLBACK_PORT must be between 1 and 65535.")
 
@@ -53,7 +62,7 @@ def acquire_api_token(config: EntraConfig) -> dict:
     return result
 
 
-def save_token(result: dict, path: str | Path = "tokens.json") -> None:
+def save_token(result: Mapping[str, object], path: str | Path = "tokens.json") -> None:
     """Save the access token as ``{"access_token": "..."}``, with private file permissions."""
     token_path = Path(path)
     payload = {"access_token": result["access_token"]}
@@ -63,6 +72,41 @@ def save_token(result: dict, path: str | Path = "tokens.json") -> None:
         stream.write("\n")
     token_path.chmod(0o600)
     print(f"Access token saved to {token_path}")
+
+
+def print_token_user(access_token: str) -> None:
+    """Display unverified JWT user claims only; never use them for authorization."""
+    parts = access_token.split(".")
+    if len(parts) != 3:
+        print("User unavailable: access token is not a readable JWT.", flush=True)
+        return
+    try:
+        payload = parts[1] + "=" * (-len(parts[1]) % 4)
+        claims = json.loads(base64.b64decode(payload, altchars=b"-_", validate=True))
+    except (binascii.Error, ValueError, UnicodeDecodeError):
+        print("User unavailable: access token has an unreadable JWT payload.", flush=True)
+        return
+    if not isinstance(claims, dict):
+        print("User unavailable: access token has no user claims.", flush=True)
+        return
+
+    def claim(*names: str) -> str:
+        for name in names:
+            value = claims.get(name)
+            if isinstance(value, str) and value.strip():
+                return "".join(char if char.isprintable() else " " for char in value).strip()
+        return ""
+
+    name = claim("name")
+    username = claim("preferred_username", "upn", "unique_name", "email")
+    user = f"{name} ({username})" if name and username and name != username else name or username
+    if not user:
+        identifier = claim("oid", "sub")
+        user = f"User ID: {identifier}" if identifier else ""
+    if user:
+        print(f"User (from token claims, unverified): {user}", flush=True)
+    else:
+        print("User unavailable: access token has no user claims.", flush=True)
 
 
 def login_entra(

@@ -14,11 +14,11 @@ from ddplrll_reader.auth import login
 # ──────────────────────────────────────────────────────────────
 # CONFIG — edit these values before running
 # ──────────────────────────────────────────────────────────────
-KEYCLOAK_URL  = "https://lrllkeyclock.azurewebsites.net"   # or your Keycloak host
-REALM         = "LowResourceLanguageDataTrust"
-CLIENT_ID     = "LRLL-API-ID"
+KEYCLOAK_URL  = "http://localhost:8081"
+REALM         = "chambo"
+CLIENT_ID     = "chambo-frontend"
 SCOPES        = "openid profile email"
-CALLBACK_PORT = 8081                   # local port for the redirect
+CALLBACK_PORT = 5000                   # local port for the redirect
 # ──────────────────────────────────────────────────────────────
 
 

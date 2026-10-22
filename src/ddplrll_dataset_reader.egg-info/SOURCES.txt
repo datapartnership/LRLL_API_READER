@@ -13,4 +13,9 @@ src/ddplrll_reader/client.py
 src/ddplrll_reader/config.py
 src/ddplrll_reader/downloader.py
 src/ddplrll_reader/entra_auth.py
+src/ddplrll_reader/entra_spa.html
+src/ddplrll_reader/entra_spa.js
+src/ddplrll_reader/entra_spa_auth.py
 src/ddplrll_reader/models.py
+tests/test_entra_spa_auth.py
+tests/test_token_user.py
